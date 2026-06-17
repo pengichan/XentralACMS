@@ -851,3 +851,50 @@ func (c *UserController) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
 }
+
+type AccountSupportRequest struct {
+	Email       string `json:"email"`
+	FullName    string `json:"fullName"`
+	RequestType string `json:"requestType"`
+	Message     string `json:"message"`
+}
+
+func (c *UserController) RequestAccountSupport(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var payload AccountSupportRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	payload.Email = strings.TrimSpace(payload.Email)
+	payload.FullName = strings.TrimSpace(payload.FullName)
+	payload.RequestType = strings.TrimSpace(payload.RequestType)
+	payload.Message = strings.TrimSpace(payload.Message)
+
+	if payload.Email == "" || payload.FullName == "" || payload.RequestType == "" {
+		http.Error(w, "email, fullName, and requestType are required fields", http.StatusBadRequest)
+		return
+	}
+
+	details := "Name: " + payload.FullName
+	if payload.Message != "" {
+		details += " | Message: " + payload.Message
+	}
+
+	_, err := c.db.Exec(`
+		INSERT INTO dbo.AuditLog (
+			Timestamp, Actor, ActorRole, ActionType, TargetType, TargetName, SourceIP, Result, Severity, Details
+		) VALUES (
+			@p1, @p2, 'GUEST', 'Account Request', 'Account', @p3, @p4, 'Success', 'Info', @p5
+		)
+	`, time.Now().UTC(), payload.Email, payload.RequestType, r.RemoteAddr, details)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Support request submitted successfully"})
+}

@@ -101,8 +101,8 @@ function SignInPage() {
           <button type="button" className="btn btn-primary" onClick={handleSignIn}>Sign In</button>
 
           <div className="links links-split">
-            <a className="link" href="#">Forgot password/UserID</a>
-            <span className="auth-request-msg">Need an account? Contact an Admin</span>
+            <Link className="link" to="/request-support?type=reset">Forgot password/UserID</Link>
+            <Link className="link" to="/request-support?type=signup">Need an account? Request access</Link>
           </div>
         </form>
       </LiquidGlass>

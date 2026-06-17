@@ -18,6 +18,7 @@ import MyAccessHistory from './pages/pam/MyAccessHistory'
 import Settings from './pages/pam/Settings'
 import ServerDetails from './pages/pam/ServerDetails'
 import OnboardingSetupModal from './components/onboarding-setup/OnboardingSetupModal'
+import RequestSupportPage from './pages/support/RequestSupportPage'
 
 function App() {
   const { user, logout } = useAuth()
@@ -26,7 +27,7 @@ function App() {
 
   // Route protection
   useEffect(() => {
-    const publicPaths = ['/sign-in', '/sign-up', '/']
+    const publicPaths = ['/sign-in', '/sign-up', '/', '/request-support']
     if (!user && !publicPaths.includes(location.pathname)) {
       navigate('/sign-in')
     }
@@ -75,6 +76,7 @@ function App() {
           <Route path="/login" element={<Navigate to="/sign-in" replace />} />
           <Route path="/sign-in" element={<SignInPage />} />
           <Route path="/sign-up" element={<Navigate to="/sign-in" replace />} />
+          <Route path="/request-support" element={<RequestSupportPage />} />
 
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/pam/servers" element={<ServerManagement />} />

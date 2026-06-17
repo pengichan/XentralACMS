@@ -1,0 +1,189 @@
+.support-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  background-image: url('../../assets/images/wallpaper.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.support-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 9, 19, 0.45);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.support-container {
+  width: min(540px, 100%);
+  position: relative;
+  z-index: 1;
+}
+
+.support-card {
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  background: linear-gradient(
+    135deg,
+    rgba(20, 32, 60, 0.9) 0%,
+    rgba(10, 18, 36, 0.94) 55%,
+    rgba(6, 12, 24, 0.96) 100%
+  );
+  box-shadow: 
+    0 24px 55px rgba(2, 6, 16, 0.58),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  padding: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.support-header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.support-header h2 {
+  margin: 0 0 6px;
+  font-size: 1.6rem;
+  font-weight: 800;
+  background: linear-gradient(120deg, #ffd76b, #ffae40);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.support-header p {
+  margin: 0;
+  color: #9ab4d6;
+  font-size: 0.9rem;
+}
+
+.support-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.support-field label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #c9dbf2;
+}
+
+.support-field input,
+.support-field select,
+.support-field textarea {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 12px 14px;
+  color: #fff;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.support-field select option {
+  background: #111827;
+  color: #fff;
+}
+
+.support-field input:focus,
+.support-field select:focus,
+.support-field textarea:focus {
+  outline: none;
+  border-color: #ffd76b;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(255, 215, 107, 0.15);
+}
+
+.support-field textarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+}
+
+.support-error-banner {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.26);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: #f87171;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.support-submit-btn {
+  height: 46px;
+  border: 0;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #111827;
+  background: linear-gradient(120deg, #ffd76b, #ffae40);
+  box-shadow: 0 10px 22px rgba(255, 174, 64, 0.28);
+  cursor: pointer;
+  width: 100%;
+  margin-top: 8px;
+  transition: all 0.2s ease;
+}
+
+.support-submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: 0 12px 24px rgba(255, 174, 64, 0.35);
+}
+
+.support-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.support-back-link {
+  text-align: center;
+  margin-top: 4px;
+}
+
+.support-back-link a {
+  color: #9ab4d6;
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: color 0.15s ease;
+}
+
+.support-back-link a:hover {
+  color: #ffd76b;
+  text-decoration: underline;
+}
+
+/* Success Card View */
+.support-success-card {
+  text-align: center;
+  padding: 40px 30px;
+}
+
+.support-success-icon {
+  font-size: 3rem;
+  color: #34d399;
+  margin-bottom: 16px;
+}
+
+.support-success-card h3 {
+  margin: 0 0 10px;
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.support-success-card p {
+  color: #9ab4d6;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0 0 24px;
+}
