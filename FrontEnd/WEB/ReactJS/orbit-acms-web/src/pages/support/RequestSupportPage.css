@@ -187,3 +187,20 @@
   line-height: 1.5;
   margin: 0 0 24px;
 }
+
+.support-row {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+.support-row .support-field {
+  flex: 1;
+}
+
+@media (max-width: 540px) {
+  .support-row {
+    flex-direction: column;
+    gap: 20px;
+  }
+}

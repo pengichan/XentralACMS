@@ -6,7 +6,9 @@ function RequestSupportPage() {
   const location = useLocation();
   const [formData, setFormData] = useState({
     email: '',
-    fullName: '',
+    firstName: '',
+    lastName: '',
+    requestedUsername: '',
     requestType: 'Account Registration',
     message: ''
   });
@@ -35,8 +37,13 @@ function RequestSupportPage() {
     e.preventDefault();
     setError('');
 
-    if (!formData.email.trim() || !formData.fullName.trim()) {
+    if (!formData.email.trim() || !formData.firstName.trim() || !formData.lastName.trim()) {
       setError('Please fill out all required fields.');
+      return;
+    }
+
+    if (formData.requestType === 'Account Registration' && !formData.requestedUsername.trim()) {
+      setError('Please suggest a requested username.');
       return;
     }
 
@@ -61,6 +68,8 @@ function RequestSupportPage() {
     }
   };
 
+  const isRegistration = formData.requestType === 'Account Registration';
+
   return (
     <section className="support-page">
       <div className="support-container">
@@ -77,28 +86,58 @@ function RequestSupportPage() {
               </div>
             )}
 
-            <div className="support-field">
-              <label htmlFor="fullName">Full Name</label>
-              <input
-                id="fullName"
-                type="text"
-                placeholder="Enter your full name"
-                value={formData.fullName}
-                onChange={handleChange}
-                required
-              />
+            <div className="support-row">
+              <div className="support-field">
+                <label htmlFor="firstName">First Name</label>
+                <input
+                  id="firstName"
+                  type="text"
+                  placeholder="First name"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+
+              <div className="support-field">
+                <label htmlFor="lastName">Last Name</label>
+                <input
+                  id="lastName"
+                  type="text"
+                  placeholder="Last name"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
             </div>
 
-            <div className="support-field">
-              <label htmlFor="email">Contact Email Address</label>
-              <input
-                id="email"
-                type="email"
-                placeholder="Enter your contact email"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
+            <div className="support-row">
+              <div className="support-field">
+                <label htmlFor="email">Contact Email Address</label>
+                <input
+                  id="email"
+                  type="email"
+                  placeholder="name@company.com"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+
+              <div className="support-field">
+                <label htmlFor="requestedUsername">
+                  {isRegistration ? 'Requested Username' : 'Your UserID (if known)'}
+                </label>
+                <input
+                  id="requestedUsername"
+                  type="text"
+                  placeholder={isRegistration ? 'e.g. jsmith' : 'e.g. jsmith (optional)'}
+                  value={formData.requestedUsername}
+                  onChange={handleChange}
+                  required={isRegistration}
+                />
+              </div>
             </div>
 
             <div className="support-field">

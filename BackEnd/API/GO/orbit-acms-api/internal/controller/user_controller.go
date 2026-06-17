@@ -853,10 +853,12 @@ func (c *UserController) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 type AccountSupportRequest struct {
-	Email       string `json:"email"`
-	FullName    string `json:"fullName"`
-	RequestType string `json:"requestType"`
-	Message     string `json:"message"`
+	Email             string `json:"email"`
+	FirstName         string `json:"firstName"`
+	LastName          string `json:"lastName"`
+	RequestedUsername string `json:"requestedUsername"`
+	RequestType       string `json:"requestType"`
+	Message           string `json:"message"`
 }
 
 func (c *UserController) RequestAccountSupport(w http.ResponseWriter, r *http.Request) {
@@ -869,16 +871,21 @@ func (c *UserController) RequestAccountSupport(w http.ResponseWriter, r *http.Re
 	}
 
 	payload.Email = strings.TrimSpace(payload.Email)
-	payload.FullName = strings.TrimSpace(payload.FullName)
+	payload.FirstName = strings.TrimSpace(payload.FirstName)
+	payload.LastName = strings.TrimSpace(payload.LastName)
+	payload.RequestedUsername = strings.TrimSpace(payload.RequestedUsername)
 	payload.RequestType = strings.TrimSpace(payload.RequestType)
 	payload.Message = strings.TrimSpace(payload.Message)
 
-	if payload.Email == "" || payload.FullName == "" || payload.RequestType == "" {
-		http.Error(w, "email, fullName, and requestType are required fields", http.StatusBadRequest)
+	if payload.Email == "" || payload.FirstName == "" || payload.LastName == "" || payload.RequestType == "" {
+		http.Error(w, "email, firstName, lastName, and requestType are required fields", http.StatusBadRequest)
 		return
 	}
 
-	details := "Name: " + payload.FullName
+	details := "Name: " + payload.FirstName + " " + payload.LastName
+	if payload.RequestedUsername != "" {
+		details += " | Proposed UserID: " + payload.RequestedUsername
+	}
 	if payload.Message != "" {
 		details += " | Message: " + payload.Message
 	}
