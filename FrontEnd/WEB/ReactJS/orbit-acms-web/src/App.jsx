@@ -3,7 +3,6 @@ import { useEffect } from 'react'
 import { Navigate, Route, Routes, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import SignInPage from './pages/sign-in/SignInPage'
-import SignUpPage from './pages/sign-up/SignUpPage'
 import UniversalTheme from './components/universal-theme/UniversalTheme'
 import SidebarNav from './components/SidebarNav'
 import { Link } from 'react-router-dom'
@@ -75,7 +74,7 @@ function App() {
           <Route path="/" element={<Navigate to="/sign-in" replace />} />
           <Route path="/login" element={<Navigate to="/sign-in" replace />} />
           <Route path="/sign-in" element={<SignInPage />} />
-          <Route path="/sign-up" element={<SignUpPage />} />
+          <Route path="/sign-up" element={<Navigate to="/sign-in" replace />} />
 
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/pam/servers" element={<ServerManagement />} />

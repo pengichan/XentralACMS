@@ -382,3 +382,11 @@
     border-radius: 18px !important;
   }
 }
+
+.auth-request-msg {
+  color: var(--auth-muted);
+  font-weight: 500;
+  font-size: 13px;
+  text-align: right;
+  opacity: 0.85;
+}

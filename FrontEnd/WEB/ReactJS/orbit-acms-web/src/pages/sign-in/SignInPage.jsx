@@ -102,7 +102,7 @@ function SignInPage() {
 
           <div className="links links-split">
             <a className="link" href="#">Forgot password/UserID</a>
-            <Link className="link" to="/sign-up">Create account</Link>
+            <span className="auth-request-msg">Need an account? Contact an Admin</span>
           </div>
         </form>
       </LiquidGlass>
