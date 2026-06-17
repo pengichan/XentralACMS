@@ -16,6 +16,18 @@ function RequestSupportPage() {
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [setupCompleted, setSetupCompleted] = useState(null);
+
+  useEffect(() => {
+    fetch('http://localhost:8080/api/system/setup-status')
+      .then(res => res.json())
+      .then(data => {
+        if (data && typeof data.setupCompleted === 'boolean') {
+          setSetupCompleted(data.setupCompleted);
+        }
+      })
+      .catch(err => console.error('Failed to load setup status', err));
+  }, []);
 
   // Set initial request type based on query param
   useEffect(() => {
@@ -69,6 +81,26 @@ function RequestSupportPage() {
   };
 
   const isRegistration = formData.requestType === 'Account Registration';
+
+  if (setupCompleted === false) {
+    return (
+      <section className="support-page">
+        <div className="support-container">
+          <div className="support-card support-success-card">
+            <div className="support-success-icon" style={{ color: '#ef4444' }}>⚠</div>
+            <h3>Setup in Progress</h3>
+            <p>
+              Support and account registration requests are currently disabled. 
+              Please wait until the system administrator has completed the initial configuration.
+            </p>
+            <Link to="/sign-in" className="btn btn-primary support-submit-btn" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>
+              Return to Sign In
+            </Link>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="support-page">

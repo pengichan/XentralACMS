@@ -71,6 +71,7 @@ func New(db *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /api/users/login", user.Login)
 	mux.HandleFunc("POST /api/users/logout", user.Logout)
 	mux.HandleFunc("POST /api/account-requests", user.RequestAccountSupport)
+	mux.HandleFunc("GET /api/system/setup-status", user.GetSetupStatus)
 	mux.HandleFunc("GET /api/users/{id}", user.GetByID)
 	mux.HandleFunc("PUT /api/users/{id}", user.Update)
 	mux.HandleFunc("DELETE /api/users/{id}", user.Delete)

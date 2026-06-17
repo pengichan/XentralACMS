@@ -905,3 +905,26 @@ func (c *UserController) RequestAccountSupport(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Support request submitted successfully"})
 }
+
+func (c *UserController) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var count int
+	err := c.db.QueryRow(`
+		SELECT COUNT(1) 
+		FROM dbo.users 
+		WHERE user_id = 'admin' 
+		  AND email = 'admin@xentralacms.local' 
+		  AND is_deleted = 0
+	`).Scan(&count)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	setupCompleted := (count == 0)
+
+	json.NewEncoder(w).Encode(map[string]bool{
+		"setupCompleted": setupCompleted,
+	})
+}

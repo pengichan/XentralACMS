@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import LiquidGlass from 'liquid-glass-react'
 import { useAuth } from '../../context/AuthContext'
@@ -12,8 +12,20 @@ function SignInPage() {
     password: ''
   })
   const [errorMessage, setErrorMessage] = useState('')
+  const [setupCompleted, setSetupCompleted] = useState(false)
   const navigate = useNavigate()
   const { login } = useAuth()
+
+  useEffect(() => {
+    fetch('http://localhost:8080/api/system/setup-status')
+      .then(res => res.json())
+      .then(data => {
+        if (data && typeof data.setupCompleted === 'boolean') {
+          setSetupCompleted(data.setupCompleted)
+        }
+      })
+      .catch(err => console.error('Failed to load setup status', err))
+  }, [])
 
   const handleChange = (event) => {
     const { id, value } = event.target
@@ -100,10 +112,12 @@ function SignInPage() {
 
           <button type="button" className="btn btn-primary" onClick={handleSignIn}>Sign In</button>
 
-          <div className="links links-split">
-            <Link className="link" to="/request-support?type=reset">Forgot password/UserID</Link>
-            <Link className="link" to="/request-support?type=signup">Need an account? Request access</Link>
-          </div>
+          {setupCompleted && (
+            <div className="links links-split">
+              <Link className="link" to="/request-support?type=reset">Forgot password/UserID</Link>
+              <Link className="link" to="/request-support?type=signup">Need an account? Request access</Link>
+            </div>
+          )}
         </form>
       </LiquidGlass>
 
