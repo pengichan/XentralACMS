@@ -283,6 +283,7 @@ func (c *UserController) Update(w http.ResponseWriter, r *http.Request) {
 	result, err := c.db.Exec(`
 		UPDATE dbo.users
 		SET user_role_id = @p2,
+		    user_id = @p3,
 		    first_name = @p4,
 		    last_name = @p5,
 		    email = @p6,

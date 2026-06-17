@@ -4,7 +4,7 @@
 IF NOT EXISTS (
   SELECT 1
   FROM dbo.users
-  WHERE email = 'admin@orbitacms.local'
+  WHERE email = 'admin@xentralacms.local'
 )
 BEGIN
   INSERT INTO dbo.users (
@@ -28,13 +28,13 @@ BEGIN
   VALUES (
     '44444444-4444-4444-4444-444444444441',
     '11111111-1111-1111-1111-111111111111',
-    'system.admin',
+    'admin',
     'System',
     'Admin',
-    'admin@orbitacms.local',
-    '09999999999',
-    'Admin@123',
-    'Default admin user',
+    'admin@xentralacms.local',
+    '00000000000',
+    'admin',
+    'Default admin user for onboarding',
     GETDATE(),
     1,
     0,
@@ -43,7 +43,7 @@ BEGIN
     'SYSTEM',
     'SYSTEM'
   );
-  PRINT 'Inserted user: admin@orbitacms.local';
+  PRINT 'Inserted user: admin@xentralacms.local';
 END
 ELSE
-  PRINT 'User already exists: admin@orbitacms.local';
+  PRINT 'User already exists: admin@xentralacms.local';

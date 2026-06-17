@@ -1,6 +1,6 @@
 -- 09_PromoteAdminToSuperAdmin.sql
 -- Run this ONCE to promote your existing default admin account to Super Admin.
--- Replace 'system.admin' below with your actual user_id if different.
+-- Replace 'admin' below with your actual user_id if different.
 
 -- Step 1: Verify which user you want to promote (confirm before running Step 2)
 SELECT
@@ -18,15 +18,15 @@ GO
 
 -- Step 2: Promote the user to SUPER_ADMIN
 -- The SUPER_ADMIN role ID is '00000000-0000-0000-0000-000000000001'
--- Change 'system.admin' to your actual user_id if needed.
+-- Change 'admin' to your actual user_id if needed.
 UPDATE dbo.users
 SET
     user_role_id = '00000000-0000-0000-0000-000000000001',
     updated_date = GETDATE()
-WHERE user_id = 'system.admin'
+WHERE user_id = 'admin'
   AND is_deleted = 0;
 
-PRINT 'Promoted system.admin to SUPER_ADMIN role.';
+PRINT 'Promoted admin to SUPER_ADMIN role.';
 PRINT 'Rows affected: ' + CAST(@@ROWCOUNT AS VARCHAR);
 
 GO

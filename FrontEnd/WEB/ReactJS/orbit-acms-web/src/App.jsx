@@ -18,6 +18,7 @@ import AssignedServers from './pages/pam/AssignedServers'
 import MyAccessHistory from './pages/pam/MyAccessHistory'
 import Settings from './pages/pam/Settings'
 import ServerDetails from './pages/pam/ServerDetails'
+import OnboardingSetupModal from './components/onboarding-setup/OnboardingSetupModal'
 
 function App() {
   const { user, logout } = useAuth()
@@ -90,6 +91,7 @@ function App() {
           </Routes>
         </div>
       </div>
+      <OnboardingSetupModal />
     </UniversalTheme>
   )
 }
