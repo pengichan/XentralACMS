@@ -1,0 +1,16 @@
+# Dependency directories
+node_modules/
+rdp-test/node_modules/
+
+# Compiled binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# IDEs and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

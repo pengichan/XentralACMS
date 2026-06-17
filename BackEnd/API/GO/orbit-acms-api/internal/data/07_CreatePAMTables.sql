@@ -1,0 +1,62 @@
+-- 07_CreatePAMTables.sql
+
+CREATE TABLE [dbo].[Server] (
+    [ID] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    [Hostname] NVARCHAR(100) NOT NULL,
+    [IPAddress] NVARCHAR(50) NOT NULL,
+    [OSType] NVARCHAR(50) NOT NULL,
+    [Description] NVARCHAR(500) NULL,
+    [IsActive] BIT NOT NULL DEFAULT 1,
+    [IsDeleted] BIT NOT NULL DEFAULT 0,
+    [CreatedDate] DATETIME NOT NULL DEFAULT GETDATE(),
+    [UpdatedDate] DATETIME NOT NULL DEFAULT GETDATE(),
+    [CreatedBy] NVARCHAR(100) NULL,
+    [UpdatedBy] NVARCHAR(100) NULL
+);
+GO
+
+CREATE TABLE [dbo].[Credential] (
+    [ID] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    [ServerID] UNIQUEIDENTIFIER NOT NULL,
+    [Username] NVARCHAR(100) NOT NULL,
+    [EncryptedPassword] NVARCHAR(MAX) NULL,
+    [SecretType] NVARCHAR(50) NOT NULL, -- e.g., 'Password', 'SSH Key'
+    [IsActive] BIT NOT NULL DEFAULT 1,
+    [IsDeleted] BIT NOT NULL DEFAULT 0,
+    [CreatedDate] DATETIME NOT NULL DEFAULT GETDATE(),
+    [UpdatedDate] DATETIME NOT NULL DEFAULT GETDATE(),
+    [CreatedBy] NVARCHAR(100) NULL,
+    [UpdatedBy] NVARCHAR(100) NULL,
+    CONSTRAINT FK_Credential_Server FOREIGN KEY (ServerID) REFERENCES [dbo].[Server](ID)
+);
+GO
+
+CREATE TABLE [dbo].[Ticket] (
+    [ID] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    [RequesterID] NVARCHAR(100) NOT NULL,
+    [ApproverID] NVARCHAR(100) NULL,
+    [ServerID] UNIQUEIDENTIFIER NOT NULL,
+    [Reason] NVARCHAR(500) NOT NULL,
+    [Status] NVARCHAR(50) NOT NULL DEFAULT 'Pending', -- 'Pending', 'Approved', 'Rejected', 'Expired'
+    [ValidUntil] DATETIME NULL,
+    [IsDeleted] BIT NOT NULL DEFAULT 0,
+    [CreatedDate] DATETIME NOT NULL DEFAULT GETDATE(),
+    [UpdatedDate] DATETIME NOT NULL DEFAULT GETDATE(),
+    [CreatedBy] NVARCHAR(100) NULL,
+    [UpdatedBy] NVARCHAR(100) NULL,
+    CONSTRAINT FK_Ticket_Server FOREIGN KEY (ServerID) REFERENCES [dbo].[Server](ID)
+);
+GO
+
+CREATE TABLE [dbo].[SessionAudit] (
+    [ID] UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    [UserID] NVARCHAR(100) NOT NULL,
+    [ServerID] UNIQUEIDENTIFIER NOT NULL,
+    [TicketID] UNIQUEIDENTIFIER NULL,
+    [StartTime] DATETIME NOT NULL DEFAULT GETDATE(),
+    [EndTime] DATETIME NULL,
+    [Protocol] NVARCHAR(50) NOT NULL,
+    [ClientIP] NVARCHAR(50) NULL,
+    CONSTRAINT FK_SessionAudit_Server FOREIGN KEY (ServerID) REFERENCES [dbo].[Server](ID)
+);
+GO
