@@ -394,3 +394,63 @@ The backend API is developed using Go Language.
 
 ## 21. Implementation & Demonstration
 The prototype is fully configured and ready for pilot testing. All workflows—including account administration, server cataloging, ticket authorization, and secure in-browser RDP execution via token-based handshake—are operational.
+
+## 22. Email Notification & SMTP Routing Constraints (Local Development vs. Production)
+For the prototype implementation, user account approvals and resets generate automated email notifications. However, during local development and pilot testing, a local **Mock Mode** (writing to `sent_emails.log`) is utilized instead of real-time external email dispatch. This approach is justified by corporate security policies and network routing constraints:
+
+### 22.1 Authentication & MFA Policies (Local Restriction)
+* **Disabled App Passwords**: Corporate security defaults enforce strict Multi-Factor Authentication (MFA) and block standard basic authentication (SMTP AUTH). The generation of App Passwords is disabled for standard corporate users (including interns) by tenant administrators.
+* **Basic Authentication Deprecation**: Modern identity providers (such as Microsoft Entra ID) deprecate basic authentication (username/password login for SMTP) on port 587 to prevent credential harvesting.
+
+### 22.2 Direct Send Routing Constraints
+* **Internal Delivery Only**: Microsoft 365 Direct Send (connecting unauthenticated to the MX endpoint on port 25) only permits email delivery to mailboxes **within the same hosted tenant** (e.g. `@willowglen.com.sg`).
+* **Anti-Spoofing & Relay Blocks**: Attempting to send unauthenticated emails to external domains (such as `@gmail.com`) is rejected by Microsoft servers with routing error `451 4.4.4 Mail received as unauthenticated` to prevent unauthorized mail relaying. Unauthenticated internal emails are also highly subject to Directory Based Edge Blocking (DBEB) or junk/quarantine filtering unless sent from an authorized network segment.
+
+### 22.3 Production Migration Pathway
+When transitioning the prototype to a production environment within the corporate network, email notification delivery will be enabled via one of the following official pathways:
+1. **Exchange Online Inbound Connector**: The network administrator will configure an inbound connector whitelisting the application server's public/static IP. This enables secure, unauthenticated SMTP relaying to both internal and external recipients over port 25.
+2. **Dedicated Internal Relay Service**: Routing mail through an existing internal corporate SMTP gateway that permits local server relaying without anti-spoofing flags.
+
+## 23. Implemented Feature Extensions & Design Decisions
+To elevate the utility and security of the prototype beyond the initial basic requirements, several key administrative and architectural features were introduced. These design decisions resolve functional gaps, improve security compliance, and streamline local system configuration:
+
+### 23.1 Unified System Settings Dashboard
+* **Initial State**: The settings page was a non-functional placeholder.
+* **Design Decision**: Consolidated global system policies, database maintenance utilities, and email server setups under a single tabbed control center.
+* **Key Features**:
+  * **Session Timeout Controls**: A slide control to adjust the global session inactivity timeout limit in minutes.
+  * **Password Validation Policies**: Administrative options to configure the minimum password length requirement and a toggle to enforce mandatory password changes upon first login.
+  * **Audit Log Retention Controls**: An input to specify log retention length (in days) to govern future cleanups.
+  * **System Maintenance Tools**: Relocated the "Clear Audit Logs" action from the general logs view to this settings panel to enforce proper administrative separation of duties.
+
+### 23.2 Dynamic SMTP Multi-Profile Engine
+* **Initial State**: Email settings were static, hardcoded, or limited to a single profile in config files.
+* **Design Decision**: Implemented a database-backed, multi-profile SMTP manager that allows admins to maintain, test, and alternate between active email dispatchers dynamically without restarting the application.
+* **Key Features**:
+  * **Automated Presets Detection**: When entering standard emails (e.g. Gmail or Outlook), the frontend automatically detects the domain prefix and pre-fills SMTP hosts and ports to eliminate configuration complexity.
+  * **Passwordless Direct-Send Relay Bypass**: Modified both backend SMTP drivers and frontend form rules to support blank username/password inputs. This enables direct, unauthenticated relays to corporate mail exchangers (Exchange Online) on port 25.
+  * **In-App SMTP Tester**: A connection testing suite inside the settings dashboard to verify SMTP settings and receive test messages instantly.
+
+### 23.3 Dynamic Inactivity Security Policy Sync
+* **Initial State**: Session timeouts were hardcoded to 15 minutes on the client side.
+* **Design Decision**: Integrated the React client-side idle tracking hooks with the backend configuration database.
+* **Key Features**:
+  * The frontend dynamically queries `GET /api/system/settings` upon initialization or login, loading the configured timeout minutes and passing them to the active session tracker, ensuring policy changes propagate instantly system-wide.
+
+### 23.4 Client-Side Telemetry & Diagnostic Log Relay
+* **Initial State**: Javascript runtime crashes in the browser were unrecorded, making remote troubleshooting difficult.
+* **Design Decision**: Established a telemetry logging pipeline.
+* **Key Features**:
+  * Implemented a global React runtime error trap using `window.onerror` and `window.onunhandledrejection`.
+  * Client exceptions (URLs, error messages, and stack traces) are caught and automatically POSTed to `/api/debug/log` on the Go backend, surfacing browser-side crashes directly within the server console log files.
+
+### 23.5 Soft-Deleted Collision Indexing & Signup Validations
+* **Initial State**: Deactivating or soft-deleting users kept their records in `dbo.users` with `is_deleted = 1`. However, global unique constraints on `email` and `user_id` prevented subsequent sign-up requests from reusing those credentials, leaving deleted accounts permanently blocking new users. Additionally, signup requests did not check for account existence at submission time, and deletions were always soft-deleted even if they had no references.
+* **Design Decision**: Transitioned the database schema to active-only uniqueness validation, established entry-level email constraints for registration tickets, and added dynamic referential checks to choose between hard and soft deletion.
+* **Key Features**:
+  * Replaced the global `UNIQUE` constraint on `email` with a filtered non-clustered unique index (`WHERE is_deleted = 0`).
+  * Updated the unique username trigger (`trg_users_user_id_unique`) and user creation controller endpoints to filter out soft-deleted users.
+  * Added validation checks inside the support and registration request handler (`RequestAccountSupport`) to immediately check `dbo.users` for existing active accounts. This rejects duplicate signups with a `409 Conflict` at submission time and validates that password resets target active accounts.
+  * **Dynamic Soft-vs-Hard User Deletion**: Replaced the unconditional soft-deletion logic in the `Delete` handler. When a user is deleted, the backend dynamically checks if their unique ID or username is referenced in any related records or historical logs (including tickets, sessions, user images, and audit logs). If referenced, the user is soft-deleted (`is_deleted = 1`) to preserve historical integrity. If no references exist, they are completely hard-deleted (permanently removed from SQL Server) to keep the database clean.
+
+

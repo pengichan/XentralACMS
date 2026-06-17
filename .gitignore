@@ -14,3 +14,6 @@ rdp-test/node_modules/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Log files
+*.log

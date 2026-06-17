@@ -1,10 +1,10 @@
 const rdp = require('@electerm/rdpjs');
 
-console.log('Starting RDP connection test to YOUR_RDP_SERVER_IP...');
+console.log('Starting RDP connection test to 10.1.22.14...');
 
 const client = rdp.createClient({
-    userName: 'YOUR_RDP_USERNAME',
-    password: 'YOUR_RDP_PASSWORD',
+    userName: 'your_username',
+    password: 'your_password',
     domain: '',
     enablePerf: true,
     autoLogin: true,
@@ -29,4 +29,4 @@ client.on('close', () => {
 });
 
 console.log('Connecting...');
-client.connect('YOUR_RDP_SERVER_IP', 3389);
+client.connect('10.1.22.14', 3389);
