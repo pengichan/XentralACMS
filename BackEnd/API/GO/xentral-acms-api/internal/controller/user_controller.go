@@ -1,4 +1,4 @@
-﻿package controller
+package controller
 
 import (
 	"database/sql"
@@ -22,6 +22,19 @@ type UserController struct {
 const defaultSignUpRoleID = "22222222-2222-2222-2222-222222222222"
 
 func NewUserController(db *sql.DB, mailer *mail.Mailer) *UserController {
+	// Auto-migrate password_reset_codes table
+	_, _ = db.Exec(`
+		IF OBJECT_ID('dbo.password_reset_codes', 'U') IS NULL
+		BEGIN
+			CREATE TABLE dbo.password_reset_codes (
+				id INT IDENTITY(1,1) PRIMARY KEY,
+				email VARCHAR(255) NOT NULL,
+				code VARCHAR(10) NOT NULL,
+				expires_at DATETIME2 NOT NULL,
+				used BIT NOT NULL DEFAULT 0
+			);
+		END
+	`)
 	return &UserController{
 		db:     db,
 		mailer: mailer,
@@ -1692,6 +1705,252 @@ func (c *UserController) UpdateSystemSettings(w http.ResponseWriter, r *http.Req
 
 	json.NewEncoder(w).Encode(map[string]string{"message": "System settings updated successfully"})
 }
+
+func (c *UserController) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var payload struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		return
+	}
+	email := strings.TrimSpace(payload.Email)
+	if email == "" {
+		http.Error(w, "email is required", http.StatusBadRequest)
+		return
+	}
+
+	// Verify email exists in active accounts
+	var userExists int
+	err := c.db.QueryRow(`SELECT COUNT(1) FROM dbo.users WHERE email = @p1 AND is_deleted = 0 AND is_active = 1`, email).Scan(&userExists)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if userExists == 0 {
+		http.Error(w, "no active user found with this email", http.StatusNotFound)
+		return
+	}
+
+	// Generate a 6-digit code using time nano mod 1000000
+	code := fmt.Sprintf("%06d", time.Now().UnixNano()%1000000)
+
+	// Save code in dbo.password_reset_codes
+	expiresAt := time.Now().UTC().Add(15 * time.Minute)
+	_, err = c.db.Exec(`
+		INSERT INTO dbo.password_reset_codes (email, code, expires_at, used)
+		VALUES (@p1, @p2, @p3, 0)
+	`, email, code, expiresAt)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Send code email
+	if c.mailer != nil {
+		subject := "Xentral ACMS - Password Reset Verification Code"
+		body := fmt.Sprintf("Hello,\n\n"+
+			"You requested a password reset for your Xentral ACMS account.\n\n"+
+			"Your 6-digit verification code is: %s\n\n"+
+			"This code will expire in 15 minutes.\n\n"+
+			"If you did not request this, please ignore this email.\n\n"+
+			"Regards,\n"+
+			"Xentral ACMS System\n", code)
+		_ = c.mailer.SendMail([]string{email}, subject, body)
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"message": "Verification code sent successfully"})
+}
+
+func (c *UserController) ResetPasswordVerify(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var payload struct {
+		Email       string `json:"email"`
+		Code        string `json:"code"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		return
+	}
+	email := strings.TrimSpace(payload.Email)
+	code := strings.TrimSpace(payload.Code)
+	newPassword := strings.TrimSpace(payload.NewPassword)
+
+	if email == "" || code == "" || newPassword == "" {
+		http.Error(w, "email, code, and newPassword are required", http.StatusBadRequest)
+		return
+	}
+
+	// Verify code is valid and not expired
+	var codeID int
+	err := c.db.QueryRow(`
+		SELECT TOP 1 id
+		FROM dbo.password_reset_codes
+		WHERE email = @p1 AND code = @p2 AND used = 0 AND expires_at > @p3
+		ORDER BY expires_at DESC
+	`, email, code, time.Now().UTC()).Scan(&codeID)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "invalid or expired verification code", http.StatusUnauthorized)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Mark code as used
+	_, err = c.db.Exec(`UPDATE dbo.password_reset_codes SET used = 1 WHERE id = @p1`, codeID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Update user password
+	_, err = c.db.Exec(`
+		UPDATE dbo.users
+		SET login_password = @p2, updated_date = @p3, must_change_password = 0
+		WHERE email = @p1 AND is_deleted = 0
+	`, email, newPassword, time.Now().UTC())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Log audit event
+	var username string
+	_ = c.db.QueryRow(`SELECT user_id FROM dbo.users WHERE email = @p1 AND is_deleted = 0`, email).Scan(&username)
+	auditLogger := NewAuditLogController(c.db)
+	_ = auditLogger.LogEvent(
+		username,
+		"GUEST",
+		"Self Password Reset",
+		"User",
+		username,
+		"",
+		r.RemoteAddr,
+		"Success",
+		"Medium",
+		"User "+username+" successfully reset their password via email verification code",
+	)
+
+	json.NewEncoder(w).Encode(map[string]string{"message": "Password updated successfully"})
+}
+
+func (c *UserController) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	id := r.PathValue("id")
+
+	var payload struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	currentPassword := strings.TrimSpace(payload.CurrentPassword)
+	newPassword := strings.TrimSpace(payload.NewPassword)
+
+	if currentPassword == "" || newPassword == "" {
+		http.Error(w, "currentPassword and newPassword are required", http.StatusBadRequest)
+		return
+	}
+
+	// Verify current password
+	var dbPassword, username string
+	err := c.db.QueryRow(`
+		SELECT login_password, user_id
+		FROM dbo.users
+		WHERE id = @p1 AND is_deleted = 0 AND is_active = 1
+	`, id).Scan(&dbPassword, &username)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if dbPassword != currentPassword {
+		http.Error(w, "incorrect current password", http.StatusUnauthorized)
+		return
+	}
+
+	// Check password policy (minimum length)
+	var minLen int
+	_ = c.db.QueryRow(`SELECT min_password_length FROM dbo.system_settings WHERE id = 1`).Scan(&minLen)
+	if minLen < 4 {
+		minLen = 8
+	}
+	if len(newPassword) < minLen {
+		http.Error(w, fmt.Sprintf("password must be at least %d characters long", minLen), http.StatusBadRequest)
+		return
+	}
+
+	// Update password and clear must_change_password
+	_, err = c.db.Exec(`
+		UPDATE dbo.users
+		SET login_password = @p2, updated_date = @p3, must_change_password = 0
+		WHERE id = @p1 AND is_deleted = 0
+	`, id, newPassword, time.Now().UTC())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Log audit event
+	auditLogger := NewAuditLogController(c.db)
+	_ = auditLogger.LogEvent(
+		username,
+		"USER",
+		"Change Password",
+		"User",
+		username,
+		"",
+		r.RemoteAddr,
+		"Success",
+		"Info",
+		"User "+username+" successfully updated their personal password in Settings",
+	)
+
+	json.NewEncoder(w).Encode(map[string]string{"message": "Password changed successfully"})
+}
+
+func (c *UserController) GetPendingCounts(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var pendingTickets, pendingRequests int
+
+	err := c.db.QueryRow(`
+		SELECT COUNT(1) 
+		FROM dbo.Ticket 
+		WHERE status = 'Pending' AND isdeleted = 0
+	`).Scan(&pendingTickets)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = c.db.QueryRow(`
+		SELECT COUNT(1) 
+		FROM dbo.account_requests 
+		WHERE status = 'PENDING'
+	`).Scan(&pendingRequests)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]int{
+		"pendingTickets":  pendingTickets,
+		"pendingRequests": pendingRequests,
+	})
+}
+
 
 
 

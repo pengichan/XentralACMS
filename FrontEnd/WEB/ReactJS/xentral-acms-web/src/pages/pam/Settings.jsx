@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
 const API = 'http://localhost:8080';
@@ -14,10 +14,10 @@ const MODAL_CARD = {
 };
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, isAdmin, isSuperAdmin, updateUser } = useAuth();
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState('smtp'); // 'smtp' or 'policies'
+  const [activeTab, setActiveTab] = useState('personal'); // 'personal', 'smtp' or 'policies'
 
   // SMTP Profiles States
   const [profiles, setProfiles] = useState([]);
@@ -93,10 +93,148 @@ export default function Settings() {
     }
   }, []);
 
+  // Personal Settings States
+  const [personalForm, setPersonalForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    mobileNo: '',
+  });
+  const [personalLoading, setPersonalLoading] = useState(false);
+  const [personalSaving, setPersonalSaving] = useState(false);
+  const [personalSuccess, setPersonalSuccess] = useState('');
+  const [personalError, setPersonalError] = useState('');
+
+  // Personal Change Password States
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmNewPassword: '',
+  });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  const fetchPersonalProfile = useCallback(async () => {
+    if (!user?.id) return;
+    setPersonalLoading(true);
+    setPersonalError('');
+    try {
+      const res = await fetch(`${API}/api/users/${user.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPersonalForm({
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          email: data.email || '',
+          mobileNo: data.mobileNo || '',
+        });
+      } else {
+        setPersonalError('Failed to load profile details.');
+      }
+    } catch (err) {
+      console.error('Failed to load profile details', err);
+      setPersonalError('Connection error loading profile.');
+    } finally {
+      setPersonalLoading(false);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
-    fetchProfiles();
-    fetchSystemSettings();
-  }, [fetchProfiles, fetchSystemSettings]);
+    fetchPersonalProfile();
+    if (isAdmin || isSuperAdmin) {
+      fetchProfiles();
+      fetchSystemSettings();
+    }
+  }, [user?.id, isAdmin, isSuperAdmin, fetchPersonalProfile, fetchProfiles, fetchSystemSettings]);
+
+  const handleSavePersonalProfile = async (e) => {
+    e.preventDefault();
+    setPersonalSaving(true);
+    setPersonalSuccess('');
+    setPersonalError('');
+
+    if (!personalForm.firstName.trim() || !personalForm.lastName.trim() || !personalForm.email.trim() || !personalForm.mobileNo.trim()) {
+      setPersonalError('All profile fields are required.');
+      setPersonalSaving(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API}/api/users/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: personalForm.firstName.trim(),
+          lastName: personalForm.lastName.trim(),
+          email: personalForm.email.trim(),
+          mobileNo: personalForm.mobileNo.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        updateUser({
+          firstName: updated.firstName,
+          lastName: updated.lastName,
+          email: updated.email,
+          mobileNo: updated.mobileNo,
+        });
+        setPersonalSuccess('Profile updated successfully!');
+      } else {
+        setPersonalError(await res.text() || 'Failed to update profile.');
+      }
+    } catch (err) {
+      setPersonalError('Failed to connect to server.');
+    } finally {
+      setPersonalSaving(false);
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPasswordSaving(true);
+    setPasswordSuccess('');
+    setPasswordError('');
+
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+      setPasswordError('Both current and new passwords are required.');
+      setPasswordSaving(false);
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmNewPassword) {
+      setPasswordError('New passwords do not match.');
+      setPasswordSaving(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API}/api/users/${user.id}/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      });
+
+      if (res.ok) {
+        setPasswordSuccess('Password changed successfully!');
+        setPasswordForm({
+          currentPassword: '',
+          newPassword: '',
+          confirmNewPassword: '',
+        });
+      } else {
+        setPasswordError(await res.text() || 'Failed to change password.');
+      }
+    } catch (err) {
+      setPasswordError('Failed to connect to server.');
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
 
   const handleSaveSystemSettings = async (e) => {
     e.preventDefault();
@@ -324,29 +462,180 @@ export default function Settings() {
       <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: '2rem' }}>
         <button
           type="button"
-          onClick={() => setActiveTab('smtp')}
+          onClick={() => setActiveTab('personal')}
           style={{
-            background: 'none', border: 'none', color: activeTab === 'smtp' ? '#4facfe' : 'rgba(255,255,255,0.5)',
-            borderBottom: activeTab === 'smtp' ? '3px solid #4facfe' : '3px solid transparent',
+            background: 'none', border: 'none', color: activeTab === 'personal' ? '#4facfe' : 'rgba(255,255,255,0.5)',
+            borderBottom: activeTab === 'personal' ? '3px solid #4facfe' : '3px solid transparent',
             padding: '0.75rem 1.2rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.92rem', transition: 'all 0.15s'
           }}
         >
-          📨 Email SMTP Profiles
+          👤 Personal Settings
         </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('policies')}
-          style={{
-            background: 'none', border: 'none', color: activeTab === 'policies' ? '#4facfe' : 'rgba(255,255,255,0.5)',
-            borderBottom: activeTab === 'policies' ? '3px solid #4facfe' : '3px solid transparent',
-            padding: '0.75rem 1.2rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.92rem', transition: 'all 0.15s'
-          }}
-        >
-          🛡️ Global System Policies
-        </button>
+        {(isAdmin || isSuperAdmin) && (
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveTab('smtp')}
+              style={{
+                background: 'none', border: 'none', color: activeTab === 'smtp' ? '#4facfe' : 'rgba(255,255,255,0.5)',
+                borderBottom: activeTab === 'smtp' ? '3px solid #4facfe' : '3px solid transparent',
+                padding: '0.75rem 1.2rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.92rem', transition: 'all 0.15s'
+              }}
+            >
+              📨 Email SMTP Profiles
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('policies')}
+              style={{
+                background: 'none', border: 'none', color: activeTab === 'policies' ? '#4facfe' : 'rgba(255,255,255,0.5)',
+                borderBottom: activeTab === 'policies' ? '3px solid #4facfe' : '3px solid transparent',
+                padding: '0.75rem 1.2rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.92rem', transition: 'all 0.15s'
+              }}
+            >
+              🛡️ Global System Policies
+            </button>
+          </>
+        )}
       </div>
 
-      {activeTab === 'smtp' ? (
+      {activeTab === 'personal' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+            {/* Edit Profile Form */}
+            <div className="pam-card" style={{ padding: '2rem' }}>
+              <h3>👤 Edit Personal Profile</h3>
+              <p style={{ opacity: 0.6, fontSize: '0.82rem', margin: '0.3rem 0 1.5rem' }}>
+                Update your contact details and account profile information.
+              </p>
+              {personalLoading ? (
+                <p style={{ opacity: 0.5 }}>Loading profile...</p>
+              ) : (
+                <form onSubmit={handleSavePersonalProfile} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <label style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>First Name *</label>
+                    <input
+                      type="text"
+                      className="pam-input"
+                      value={personalForm.firstName}
+                      onChange={(e) => setPersonalForm(prev => ({ ...prev, firstName: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <label style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>Last Name *</label>
+                    <input
+                      type="text"
+                      className="pam-input"
+                      value={personalForm.lastName}
+                      onChange={(e) => setPersonalForm(prev => ({ ...prev, lastName: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <label style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>Email Address *</label>
+                    <input
+                      type="email"
+                      className="pam-input"
+                      value={personalForm.email}
+                      onChange={(e) => setPersonalForm(prev => ({ ...prev, email: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <label style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>Mobile No *</label>
+                    <input
+                      type="text"
+                      className="pam-input"
+                      value={personalForm.mobileNo}
+                      onChange={(e) => setPersonalForm(prev => ({ ...prev, mobileNo: e.target.value }))}
+                      required
+                    />
+                  </div>
+
+                  {personalSuccess && (
+                    <div style={{ padding: '0.75rem 1rem', background: 'rgba(0,255,0,0.08)', border: '1px solid rgba(0,255,0,0.3)', borderRadius: '8px', color: '#a8ffca', fontSize: '0.85rem' }}>
+                      ✓ {personalSuccess}
+                    </div>
+                  )}
+
+                  {personalError && (
+                    <div style={{ padding: '0.75rem 1rem', background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.3)', borderRadius: '8px', color: '#ffcaca', fontSize: '0.85rem' }}>
+                      ⚠ {personalError}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                    <button type="submit" disabled={personalSaving} className="pam-button">
+                      {personalSaving ? 'Saving Profile...' : '💾 Save Profile'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
+            {/* Change Password Form */}
+            <div className="pam-card" style={{ padding: '2rem' }}>
+              <h3>🔐 Update Password</h3>
+              <p style={{ opacity: 0.6, fontSize: '0.82rem', margin: '0.3rem 0 1.5rem' }}>
+                Secure your account by changing your login credentials.
+              </p>
+              <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <label style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>Current Password *</label>
+                  <input
+                    type="password"
+                    className="pam-input"
+                    value={passwordForm.currentPassword}
+                    onChange={(e) => setPasswordForm(prev => ({ ...prev, currentPassword: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <label style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>New Password *</label>
+                  <input
+                    type="password"
+                    className="pam-input"
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <label style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>Confirm New Password *</label>
+                  <input
+                    type="password"
+                    className="pam-input"
+                    value={passwordForm.confirmNewPassword}
+                    onChange={(e) => setPasswordForm(prev => ({ ...prev, confirmNewPassword: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                {passwordSuccess && (
+                  <div style={{ padding: '0.75rem 1rem', background: 'rgba(0,255,0,0.08)', border: '1px solid rgba(0,255,0,0.3)', borderRadius: '8px', color: '#a8ffca', fontSize: '0.85rem' }}>
+                    ✓ {passwordSuccess}
+                  </div>
+                )}
+
+                {passwordError && (
+                  <div style={{ padding: '0.75rem 1rem', background: 'rgba(255,60,60,0.1)', border: '1px solid rgba(255,60,60,0.3)', borderRadius: '8px', color: '#ffcaca', fontSize: '0.85rem' }}>
+                    ⚠ {passwordError}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                  <button type="submit" disabled={passwordSaving} className="pam-button">
+                    {passwordSaving ? 'Updating Password...' : '💾 Change Password'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'smtp' && (isAdmin || isSuperAdmin) && (
         <div className="pam-card" style={{ padding: '2rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
@@ -428,7 +717,9 @@ export default function Settings() {
             </div>
           )}
         </div>
-      ) : (
+      )}
+
+      {activeTab === 'policies' && (isAdmin || isSuperAdmin) && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
           {/* Active security policies & environment info */}

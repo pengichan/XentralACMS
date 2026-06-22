@@ -1,4 +1,4 @@
-﻿package router
+package router
 
 import (
 	"database/sql"
@@ -71,6 +71,10 @@ func New(db *sql.DB, mailer *mail.Mailer) *http.ServeMux {
 	mux.HandleFunc("POST /api/users", user.Create)
 	mux.HandleFunc("POST /api/users/login", user.Login)
 	mux.HandleFunc("POST /api/users/logout", user.Logout)
+	mux.HandleFunc("POST /api/auth/forgot-password", user.ForgotPassword)
+	mux.HandleFunc("POST /api/auth/reset-password-verify", user.ResetPasswordVerify)
+	mux.HandleFunc("GET /api/system/pending-counts", user.GetPendingCounts)
+	mux.HandleFunc("POST /api/users/{id}/change-password", user.ChangePassword)
 	mux.HandleFunc("POST /api/account-requests", user.RequestAccountSupport)
 	mux.HandleFunc("GET /api/account-requests", user.ListAccountRequests)
 	mux.HandleFunc("POST /api/account-requests/{id}/approve", user.ApproveAccountRequest)

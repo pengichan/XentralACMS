@@ -1,4 +1,4 @@
-﻿package controller
+package controller
 
 import (
 	"database/sql"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -150,25 +151,30 @@ func (c *RemoteController) GetRemoteAccessDetails(w http.ResponseWriter, r *http
 	}
 
 	// 3. Get Credentials
-	var encryptedPassword, username string
+	var encryptedPassword, username, accountType string
 	if assignedCredentialID.Valid && assignedCredentialID.String != "" {
 		err = c.db.QueryRow(`
-			SELECT encryptedpassword, username
+			SELECT encryptedpassword, username, ISNULL(accounttype, 'Local')
 			FROM dbo.Credential
 			WHERE id = @p1 AND isdeleted = 0 AND isactive = 1
-		`, assignedCredentialID.String).Scan(&encryptedPassword, &username)
+		`, assignedCredentialID.String).Scan(&encryptedPassword, &username, &accountType)
 	} else {
 		err = c.db.QueryRow(`
-			SELECT TOP 1 encryptedpassword, username
+			SELECT TOP 1 encryptedpassword, username, ISNULL(accounttype, 'Local')
 			FROM dbo.Credential
 			WHERE serverid = @p1 AND isdeleted = 0 AND isactive = 1
 			ORDER BY createddate DESC
-		`, serverID).Scan(&encryptedPassword, &username)
+		`, serverID).Scan(&encryptedPassword, &username, &accountType)
 	}
 
 	if err != nil {
 		http.Error(w, "no active credentials found for this server", http.StatusNotFound)
 		return
+	}
+
+	// Auto-prefix local usernames with .\ if they do not contain a backslash, so RDP logs in locally
+	if strings.EqualFold(accountType, "Local") && !strings.Contains(username, `\`) && !strings.Contains(username, `/`) {
+		username = `.\` + username
 	}
 
 	// 4. Decrypt Password
@@ -403,15 +409,20 @@ func (c *RemoteController) GetRemoteAccessDetailsAdmin(w http.ResponseWriter, r 
 	}
 
 	// 3. Fetch Credential
-	var encryptedPassword, username string
+	var encryptedPassword, username, accountType string
 	err = c.db.QueryRow(`
-		SELECT encryptedpassword, username
+		SELECT encryptedpassword, username, ISNULL(accounttype, 'Local')
 		FROM dbo.Credential
 		WHERE id = @p1 AND serverid = @p2 AND isdeleted = 0 AND isactive = 1
-	`, credentialId, serverId).Scan(&encryptedPassword, &username)
+	`, credentialId, serverId).Scan(&encryptedPassword, &username, &accountType)
 	if err != nil {
 		http.Error(w, "credential not found", http.StatusNotFound)
 		return
+	}
+
+	// Auto-prefix local usernames with .\ if they do not contain a backslash, so RDP logs in locally
+	if strings.EqualFold(accountType, "Local") && !strings.Contains(username, `\`) && !strings.Contains(username, `/`) {
+		username = `.\` + username
 	}
 
 	// 4. Decrypt password

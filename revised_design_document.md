@@ -263,7 +263,7 @@ Allows approved users to connect to Windows Servers through browser-based RDP.
 * Normal users cannot view passwords. Passwords are masked by default.
 * Super Admin can reveal/copy passwords, which is recorded in the audit log.
 * Password credentials are stored encrypted in the database using a backend master key.
-* No account type dropdowns (Local vs AD) or prefix modifying operations (`.\`) are performed on usernames by the backend, ensuring clean username authentication.
+* Credentials of type 'Local' that do not already contain a backslash (\) are automatically prepended with `.\` by the RDP connector. This directs the domain-joined destination hosts to authenticate using their local SAM database rather than attempting Active Directory domain verification, solving authentication failures for local server accounts.
 
 ## 16. Audit Log Design
 The Audit Log module records all important system actions.
@@ -450,7 +450,31 @@ To elevate the utility and security of the prototype beyond the initial basic re
 * **Key Features**:
   * Replaced the global `UNIQUE` constraint on `email` with a filtered non-clustered unique index (`WHERE is_deleted = 0`).
   * Updated the unique username trigger (`trg_users_user_id_unique`) and user creation controller endpoints to filter out soft-deleted users.
-  * Added validation checks inside the support and registration request handler (`RequestAccountSupport`) to immediately check `dbo.users` for existing active accounts. This rejects duplicate signups with a `409 Conflict` at submission time and validates that password resets target active accounts.
   * **Dynamic Soft-vs-Hard User Deletion**: Replaced the unconditional soft-deletion logic in the `Delete` handler. When a user is deleted, the backend dynamically checks if their unique ID or username is referenced in any related records or historical logs (including tickets, sessions, user images, and audit logs). If referenced, the user is soft-deleted (`is_deleted = 1`) to preserve historical integrity. If no references exist, they are completely hard-deleted (permanently removed from SQL Server) to keep the database clean.
+
+### 23.6 Self-Service Password Recovery Flow
+* **Design Decision**: Integrated a self-service password reset system using short-lived verification codes to allow users to verify their identity and reset their own password.
+* **Key Features**:
+  * **Secure Verification Table**: Auto-migrates and maintains `dbo.password_reset_codes` to store temporary recovery codes, email addresses, expiration times, and usage flags.
+  * **Identity Verification**: Dispatches a secure 6-digit verification code to the user's email address (or backend console log when in mock mode) with a strict 15-minute expiration policy.
+  * **Direct Reset**: Validates the active verification code and updates the user's password securely on successful validation, generating a medium-severity audit event.
+
+### 23.7 Role-Based Settings Customizer (Personal Profile Settings)
+* **Design Decision**: Restructured the Settings layout to expose a role-restricted Personal Settings panel to all platform users.
+* **Key Features**:
+  * **Profile Customizer**: Allows users to update their personal information (First Name, Last Name, Email, and Mobile No) which automatically updates their active session and user context.
+  * **Self-Service Change Password**: Validates the user's current password before allowing password modifications to enforce security policies.
+  * **Role Restriction**: Hides global system policies and email SMTP configuration tabs for standard users.
+
+### 23.8 Local Account RDP Domain Bypass
+* **Design Decision**: Auto-detects local server credentials and redirects authentication.
+* **Key Features**:
+  * Prepend `.\` prefix to the username when connecting to RDP if the credential's `accounttype` is `'Local'` and the username does not contain a backslash. This prevents domain-joined Windows servers from attempting Active Directory authentication on local accounts.
+
+### 23.9 Real-Time Admin Notification Badges
+* **Design Decision**: Configured a dynamic notification polling engine inside the main navigation shell.
+* **Key Features**:
+  * Queries `GET /api/system/pending-counts` every 10 seconds.
+  * Displays dynamic red numeric notification badges on the admin navigation panel next to **Tickets** and **User Management** links for pending items.
 
 

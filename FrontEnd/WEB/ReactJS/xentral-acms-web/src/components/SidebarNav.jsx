@@ -7,6 +7,9 @@ export default function SidebarNav() {
   const navigate = useNavigate();
   const { user, isAdmin, isSuperAdmin, logout } = useAuth();
 
+  const [pendingTickets, setPendingTickets] = React.useState(0);
+  const [pendingRequests, setPendingRequests] = React.useState(0);
+
   React.useEffect(() => {
     if (!user?.id) return;
     const checkActiveStatus = async () => {
@@ -32,6 +35,25 @@ export default function SidebarNav() {
     return () => clearInterval(timer);
   }, [location.pathname, user?.id, logout, navigate]);
 
+  React.useEffect(() => {
+    if (!user?.id || !isAdmin) return;
+    const fetchCounts = async () => {
+      try {
+        const res = await fetch('http://localhost:8080/api/system/pending-counts');
+        if (res.ok) {
+          const data = await res.json();
+          setPendingTickets(data.pendingTickets || 0);
+          setPendingRequests(data.pendingRequests || 0);
+        }
+      } catch (e) {
+        console.error('Failed to fetch pending counts', e);
+      }
+    };
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 10000);
+    return () => clearInterval(interval);
+  }, [user?.id, isAdmin]);
+
   // Role-based navigation per design spec
   const adminLinks = [
     { name: 'Dashboard',       path: '/dashboard',        icon: '🏠' },
@@ -50,6 +72,7 @@ export default function SidebarNav() {
     { name: 'Assigned Servers', path: '/pam/assigned-servers', icon: '🔑' },
     { name: 'My Requests',     path: '/pam/tickets',         icon: '🎫' },
     { name: 'My Access History', path: '/pam/access-history', icon: '📜' },
+    { name: 'Settings',        path: '/pam/settings',        icon: '⚙️' },
   ];
 
   const navLinks = isAdmin ? adminLinks : userLinks;
@@ -93,6 +116,15 @@ export default function SidebarNav() {
       <nav style={{ flex: 1, padding: '1rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
         {navLinks.map((link) => {
           const active = location.pathname === link.path;
+          let badgeCount = 0;
+          if (isAdmin) {
+            if (link.name === 'Tickets') {
+              badgeCount = pendingTickets;
+            } else if (link.name === 'User Management') {
+              badgeCount = pendingRequests;
+            }
+          }
+
           return (
             <Link
               key={link.path}
@@ -115,7 +147,25 @@ export default function SidebarNav() {
               }}
             >
               <span style={{ fontSize: '1rem', minWidth: '20px', textAlign: 'center' }}>{link.icon}</span>
-              {link.name}
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                {link.name}
+                {badgeCount > 0 && (
+                  <span style={{
+                    background: '#ef4444',
+                    color: '#fff',
+                    fontSize: '0.70rem',
+                    fontWeight: 800,
+                    padding: '1px 6px',
+                    borderRadius: '999px',
+                    minWidth: '16px',
+                    textAlign: 'center',
+                    lineHeight: '1.25rem',
+                    boxShadow: '0 2px 5px rgba(239, 68, 68, 0.4)'
+                  }}>
+                    {badgeCount}
+                  </span>
+                )}
+              </span>
             </Link>
           );
         })}
