@@ -141,7 +141,7 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
         timeoutId1 = setTimeout(() => {
           setLogs((prev) => [
             ...prev,
-            `[SUCCESS] Connection established! Rendering desktop...`
+            `[INFO] Secure RDP viewport loaded. Initiating remote connection...`
           ]);
           timeoutId2 = setTimeout(() => setLoading(false), 500);
         }, 300);
