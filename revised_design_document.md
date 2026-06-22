@@ -477,4 +477,12 @@ To elevate the utility and security of the prototype beyond the initial basic re
   * Queries `GET /api/system/pending-counts` every 10 seconds.
   * Displays dynamic red numeric notification badges on the admin navigation panel next to **Tickets** and **User Management** links for pending items.
 
+### 23.10 RDP Connection Viewport Diagnostics & Error Overlay
+* **Design Decision**: Implemented dynamic cross-origin HTML5 telemetry between the `mstsc.js` RDP proxy and the React frontend to report connection diagnostics directly within the parent window's loading overlay.
+* **Key Features**:
+  * **Rendering Telemetry (`rdp-bitmap`)**: Relays RDP canvas draw updates via `postMessage` to signify successful remote desktop authentication, delaying the transition from the loading screen to avoid flash-success false positives when a connection fails immediately post-connect.
+  * **Connection Diagnostics & Mapping**: Listens to socket errors and translates complex errors (e.g. timeout, target offline, logon failure, permission denied, access restricted) into plain English alerts displayed inside the overlay.
+  * **Disconnection Overlay & Viewport Close**: Automatically reinstates the loading/failure overlay on connection termination or unexpected session replacement (e.g., when another user logs in and terminates the current RDP token), providing a clean, styled "Close Viewport" button directly inside the parent window.
+
+
 
