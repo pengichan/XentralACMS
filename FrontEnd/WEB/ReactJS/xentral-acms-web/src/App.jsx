@@ -19,7 +19,9 @@ import Settings from './pages/pam/Settings'
 import ServerDetails from './pages/pam/ServerDetails'
 import OnboardingSetupModal from './components/onboarding-setup/OnboardingSetupModal'
 import RequestSupportPage from './pages/support/RequestSupportPage'
+import FileBox from './pages/pam/FileBox'
 import ForceChangePasswordModal from './components/ForceChangePasswordModal'
+import NotificationBell from './components/NotificationBell'
 
 function App() {
   const { user, logout } = useAuth()
@@ -86,9 +88,33 @@ function App() {
 
   return (
     <UniversalTheme>
-      <div className="app-shell" style={{ display: 'flex' }}>
+      <div className="app-shell" style={{ display: 'flex', minHeight: '100vh', background: '#090d16' }}>
         <SidebarNav />
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+          {user && !['/sign-in', '/sign-up', '/', '/request-support'].includes(location.pathname) && (
+            <header style={{
+              height: '60px',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0 2rem',
+              background: 'rgba(10, 16, 35, 0.6)',
+              backdropFilter: 'blur(10px)',
+              position: 'sticky',
+              top: 0,
+              zIndex: 999,
+              color: '#fff'
+            }}>
+              <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.45)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                XentralACMS Portal
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                <NotificationBell />
+              </div>
+            </header>
+          )}
+          <div style={{ flex: 1, padding: '2rem' }}>
           <Routes>
           <Route path="/" element={<Navigate to="/sign-in" replace />} />
           <Route path="/login" element={<Navigate to="/sign-in" replace />} />
@@ -105,9 +131,11 @@ function App() {
           <Route path="/pam/reports" element={<ReportsExport />} />
           <Route path="/pam/users" element={<UserManagement />} />
           <Route path="/pam/assigned-servers" element={<AssignedServers />} />
-          <Route path="/pam/access-history" element={<MyAccessHistory />} />
+           <Route path="/pam/access-history" element={<MyAccessHistory />} />
           <Route path="/pam/settings" element={<Settings />} />
+          <Route path="/pam/files" element={<FileBox />} />
           </Routes>
+          </div>
         </div>
       </div>
       <OnboardingSetupModal />

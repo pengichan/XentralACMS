@@ -27,6 +27,8 @@ func New(db *sql.DB, mailer *mail.Mailer) *http.ServeMux {
 	remote := controller.NewRemoteController(db)
 	auditLog := controller.NewAuditLogController(db)
 	report := controller.NewReportController(db)
+	notification := controller.NewNotificationController(db)
+	fileBox := controller.NewFileController(db)
 
 	// Health
 	mux.HandleFunc("GET /health", health.GetHealth)
@@ -73,6 +75,7 @@ func New(db *sql.DB, mailer *mail.Mailer) *http.ServeMux {
 	mux.HandleFunc("POST /api/users/logout", user.Logout)
 	mux.HandleFunc("POST /api/auth/forgot-password", user.ForgotPassword)
 	mux.HandleFunc("POST /api/auth/reset-password-verify", user.ResetPasswordVerify)
+	mux.HandleFunc("POST /api/auth/recover-account", user.RecoverAccount)
 	mux.HandleFunc("GET /api/system/pending-counts", user.GetPendingCounts)
 	mux.HandleFunc("POST /api/users/{id}/change-password", user.ChangePassword)
 	mux.HandleFunc("POST /api/account-requests", user.RequestAccountSupport)
@@ -136,6 +139,15 @@ func New(db *sql.DB, mailer *mail.Mailer) *http.ServeMux {
 
 	// Reports
 	mux.HandleFunc("POST /api/reports/export", report.ExportReport)
+
+	// Notifications & File Box
+	mux.HandleFunc("GET /api/system/events", notification.SSEHandler)
+	mux.HandleFunc("GET /api/notifications", notification.ListNotifications)
+	mux.HandleFunc("POST /api/notifications/{id}/read", notification.MarkAsRead)
+	mux.HandleFunc("GET /api/files", fileBox.ListFiles)
+	mux.HandleFunc("POST /api/files/upload", fileBox.UploadFile)
+	mux.HandleFunc("GET /api/files/download/{id}", fileBox.DownloadFile)
+	mux.HandleFunc("DELETE /api/files/{id}", fileBox.DeleteFile)
 
 	return mux
 }

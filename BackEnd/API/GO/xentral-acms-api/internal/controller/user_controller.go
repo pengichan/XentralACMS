@@ -35,6 +35,38 @@ func NewUserController(db *sql.DB, mailer *mail.Mailer) *UserController {
 			);
 		END
 	`)
+
+	// Auto-migrate notifications table
+	_, _ = db.Exec(`
+		IF OBJECT_ID('dbo.notifications', 'U') IS NULL
+		BEGIN
+			CREATE TABLE dbo.notifications (
+				id VARCHAR(36) PRIMARY KEY,
+				user_id VARCHAR(50) NOT NULL,
+				title VARCHAR(100) NOT NULL,
+				message VARCHAR(255) NOT NULL,
+				link VARCHAR(255) NULL,
+				is_read BIT NOT NULL DEFAULT 0,
+				created_at DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+			);
+		END
+	`)
+
+	// Auto-migrate shared_files table
+	_, _ = db.Exec(`
+		IF OBJECT_ID('dbo.shared_files', 'U') IS NULL
+		BEGIN
+			CREATE TABLE dbo.shared_files (
+				id VARCHAR(36) PRIMARY KEY,
+				filename VARCHAR(255) NOT NULL,
+				filepath VARCHAR(510) NOT NULL,
+				uploaded_by VARCHAR(50) NOT NULL,
+				uploaded_at DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+				file_size BIGINT NOT NULL
+			);
+		END
+	`)
+
 	return &UserController{
 		db:     db,
 		mailer: mailer,
@@ -1104,6 +1136,13 @@ func (c *UserController) RequestAccountSupport(w http.ResponseWriter, r *http.Re
 		_ = c.mailer.SendMail([]string{payload.Email}, subject, body)
 	}
 
+	// Notify admins and broadcast counts
+	go func() {
+		msg := fmt.Sprintf("New account support request ('%s') from %s %s.", payload.RequestType, payload.FirstName, payload.LastName)
+		_ = AddNotification(c.db, "ROLE_ADMIN", "Account Support Request", msg, "/account-requests")
+		BroadcastPendingCountsUpdate()
+	}()
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Support request submitted successfully"})
 }
@@ -1257,6 +1296,10 @@ func (c *UserController) ApproveAccountRequest(w http.ResponseWriter, r *http.Re
 			_ = c.mailer.SendMail([]string{userEmail}, subject, body)
 		}
 
+		go func() {
+			BroadcastPendingCountsUpdate()
+		}()
+
 		json.NewEncoder(w).Encode(map[string]string{"message": "Password reset approved successfully"})
 		return
 	}
@@ -1328,6 +1371,10 @@ func (c *UserController) ApproveAccountRequest(w http.ResponseWriter, r *http.Re
 		_ = c.mailer.SendMail([]string{req.Email}, subject, body)
 	}
 
+	go func() {
+		BroadcastPendingCountsUpdate()
+	}()
+
 	json.NewEncoder(w).Encode(map[string]string{"message": "Account request approved and user created"})
 }
 
@@ -1386,6 +1433,10 @@ func (c *UserController) DenyAccountRequest(w http.ResponseWriter, r *http.Reque
 			req.FirstName, req.LastName, req.RequestType)
 		_ = c.mailer.SendMail([]string{req.Email}, subject, body)
 	}
+
+	go func() {
+		BroadcastPendingCountsUpdate()
+	}()
 
 	json.NewEncoder(w).Encode(map[string]string{"message": "Account request declined"})
 }
@@ -1950,6 +2001,100 @@ func (c *UserController) GetPendingCounts(w http.ResponseWriter, r *http.Request
 		"pendingRequests": pendingRequests,
 	})
 }
+
+func (c *UserController) RecoverAccount(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var payload struct {
+		FirstName   string `json:"firstName"`
+		LastName    string `json:"lastName"`
+		Email       string `json:"email"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	payload.FirstName = strings.TrimSpace(payload.FirstName)
+	payload.LastName = strings.TrimSpace(payload.LastName)
+	payload.Email = strings.TrimSpace(payload.Email)
+
+	if payload.FirstName == "" || payload.LastName == "" || payload.Email == "" {
+		http.Error(w, "First name, last name, and email are required", http.StatusBadRequest)
+		return
+	}
+
+	// Find the user matching First Name, Last Name, and Email
+	var id, userID string
+	var isActive, isDeleted bool
+	err := c.db.QueryRow(`
+		SELECT CONVERT(VARCHAR(36), id) as id, user_id, is_active, is_deleted
+		FROM dbo.users
+		WHERE first_name = @p1 AND last_name = @p2 AND email = @p3 AND is_deleted = 0
+	`, payload.FirstName, payload.LastName, payload.Email).Scan(&id, &userID, &isActive, &isDeleted)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "No active account matches the details provided", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if !isActive {
+		http.Error(w, "Matched account is currently disabled", http.StatusForbidden)
+		return
+	}
+
+	passwordReset := false
+	if payload.NewPassword != "" {
+		// Check password policy (minimum length)
+		var minLen int
+		_ = c.db.QueryRow(`SELECT min_password_length FROM dbo.system_settings WHERE id = 1`).Scan(&minLen)
+		if minLen < 4 {
+			minLen = 8
+		}
+		if len(payload.NewPassword) < minLen {
+			http.Error(w, fmt.Sprintf("new password must be at least %d characters long", minLen), http.StatusBadRequest)
+			return
+		}
+
+		// Update password in DB directly
+		_, err = c.db.Exec(`
+			UPDATE dbo.users
+			SET login_password = @p2, updated_date = @p3, must_change_password = 0
+			WHERE id = @p1 AND is_deleted = 0
+		`, id, payload.NewPassword, time.Now().UTC())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		passwordReset = true
+	}
+
+	// Log audit event
+	auditLogger := NewAuditLogController(c.db)
+	details := fmt.Sprintf("Account recovered for username: %s. Password Reset: %v", userID, passwordReset)
+	_ = auditLogger.LogEvent(
+		userID,
+		"USER",
+		"Account Recovery",
+		"User",
+		userID,
+		"",
+		r.RemoteAddr,
+		"Success",
+		"Medium",
+		details,
+	)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":       true,
+		"userId":        userID,
+		"passwordReset": passwordReset,
+	})
+}
+
 
 
 

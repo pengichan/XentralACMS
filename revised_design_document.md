@@ -484,5 +484,30 @@ To elevate the utility and security of the prototype beyond the initial basic re
   * **Connection Diagnostics & Mapping**: Listens to socket errors and translates complex errors (e.g. timeout, target offline, logon failure, permission denied, access restricted) into plain English alerts displayed inside the overlay.
   * **Disconnection Overlay & Viewport Close**: Automatically reinstates the loading/failure overlay on connection termination or unexpected session replacement (e.g., when another user logs in and terminates the current RDP token), providing a clean, styled "Close Viewport" button directly inside the parent window.
 
+### 23.11 Passwordless Profile-Matching Account Recovery
+* **Design Decision**: Implemented a passwordless identity matching mechanism for account username lookup and direct recovery resets.
+* **Key Features**:
+  * **No-Email Matcher (`POST /api/auth/recover-account`)**: Validates profile First Name, Last Name, and Email Address. On successful matching, returns the UserID (username).
+  * **Direct Password Reset**: If a new password is typed and passes policy validation, it updates the user password directly, allowing instant self-service recovery without relying on SMTP or log file codes.
+
+### 23.12 Server-Sent Events (SSE) Live Notification Hub
+* **Design Decision**: Configured a Server-Sent Events (SSE) publisher/subscriber channel system in the Go backend.
+* **Key Features**:
+  * **Event Streaming Hub (`GET /api/system/events`)**: Streams `text/event-stream` channels to connect browsers with standard `EventSource` wrappers.
+  * **Live Badge Push Alerts**: Broadcasts `pending_counts_update` whenever a ticket/account support request is submitted, approved, or denied. Connected client browsers instantly re-fetch count badge tallies without page refreshes.
+
+### 23.13 Header 🔔 Notification Center & Dropdown
+* **Design Decision**: Designed a glassmorphic top header bar containing a dynamic notification alert dropdown for real-time ticket alerts and quick actions.
+* **Key Features**:
+  * **Notification Database (`dbo.notifications`)**: Stores user-specific notifications and role-based group alerts (such as `ROLE_ADMIN`).
+  * **Header Bell Dropdown Panel**: Admins see live ticket requests and can click **Approve** or **Deny** buttons directly within the notification list, calling backend approval endpoints natively.
+
+### 23.14 Audited Shared File Box Portal
+* **Design Decision**: Established a secure shared file transfer utility inside XentralACMS.
+* **Key Features**:
+  * **Audited Uploads/Downloads**: Tracks file transfers in the database table `dbo.shared_files` and outputs High-severity `AuditLog` records for all uploads and downloads.
+  * **Bi-directional RDP Copy-Paste Bypass**: Users can drop files from their local PC into the File Box web portal, and retrieve them by opening the portal browser inside the remote RDP desktop session (and vice versa).
+
+
 
 

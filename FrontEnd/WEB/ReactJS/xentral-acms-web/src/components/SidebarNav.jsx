@@ -35,24 +35,46 @@ export default function SidebarNav() {
     return () => clearInterval(timer);
   }, [location.pathname, user?.id, logout, navigate]);
 
+  const fetchCounts = React.useCallback(async () => {
+    if (!user?.id || !isAdmin) return;
+    try {
+      const res = await fetch('http://localhost:8080/api/system/pending-counts');
+      if (res.ok) {
+        const data = await res.json();
+        setPendingTickets(data.pendingTickets || 0);
+        setPendingRequests(data.pendingRequests || 0);
+      }
+    } catch (e) {
+      console.error('Failed to fetch pending counts', e);
+    }
+  }, [user?.id, isAdmin]);
+
   React.useEffect(() => {
     if (!user?.id || !isAdmin) return;
-    const fetchCounts = async () => {
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 30000); // 30s backup polling
+    return () => clearInterval(interval);
+  }, [fetchCounts, user?.id, isAdmin]);
+
+  React.useEffect(() => {
+    if (!user?.id) return;
+    const eventSource = new EventSource('http://localhost:8080/api/system/events');
+
+    eventSource.onmessage = (e) => {
       try {
-        const res = await fetch('http://localhost:8080/api/system/pending-counts');
-        if (res.ok) {
-          const data = await res.json();
-          setPendingTickets(data.pendingTickets || 0);
-          setPendingRequests(data.pendingRequests || 0);
+        const payload = JSON.parse(e.data);
+        if (payload.type === 'pending_counts_update') {
+          fetchCounts();
         }
-      } catch (e) {
-        console.error('Failed to fetch pending counts', e);
+      } catch (err) {
+        // Skip parsing errors for comments (e.g. : ping)
       }
     };
-    fetchCounts();
-    const interval = setInterval(fetchCounts, 10000);
-    return () => clearInterval(interval);
-  }, [user?.id, isAdmin]);
+
+    return () => {
+      eventSource.close();
+    };
+  }, [user?.id, fetchCounts]);
 
   // Role-based navigation per design spec
   const adminLinks = [
@@ -63,6 +85,7 @@ export default function SidebarNav() {
     { name: 'Audit Logs',      path: '/pam/audit-logs',   icon: '📜' },
     { name: 'Reports',         path: '/pam/reports',      icon: '📊' },
     { name: 'User Management', path: '/pam/users',        icon: '👥' },
+    { name: 'Shared File Box', path: '/pam/files',        icon: '📤' },
     { name: 'Settings',        path: '/pam/settings',     icon: '⚙️' },
   ];
 
@@ -72,6 +95,7 @@ export default function SidebarNav() {
     { name: 'Assigned Servers', path: '/pam/assigned-servers', icon: '🔑' },
     { name: 'My Requests',     path: '/pam/tickets',         icon: '🎫' },
     { name: 'My Access History', path: '/pam/access-history', icon: '📜' },
+    { name: 'Shared File Box', path: '/pam/files',           icon: '📤' },
     { name: 'Settings',        path: '/pam/settings',        icon: '⚙️' },
   ];
 

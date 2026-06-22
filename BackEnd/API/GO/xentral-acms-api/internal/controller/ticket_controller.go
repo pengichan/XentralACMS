@@ -1,8 +1,9 @@
-﻿package controller
+package controller
 
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -79,6 +80,25 @@ func (c *TicketController) RequestAccess(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Create dynamic admin notification and broadcast counts update
+	go func() {
+		var reqName string
+		_ = c.db.QueryRow(`SELECT user_id FROM dbo.users WHERE id = @p1`, payload.RequesterID).Scan(&reqName)
+		if reqName == "" {
+			reqName = payload.RequesterID
+		}
+
+		var srvName string
+		_ = c.db.QueryRow(`SELECT hostname FROM dbo.Server WHERE id = @p1`, payload.ServerID).Scan(&srvName)
+		if srvName == "" {
+			srvName = payload.ServerID
+		}
+
+		msg := fmt.Sprintf("User '%s' requested access to server '%s' (%s). Reason: %s", reqName, srvName, payload.Urgency, payload.Reason)
+		_ = AddNotification(c.db, "ROLE_ADMIN", "New Access Ticket Request", msg, "/tickets")
+		BroadcastPendingCountsUpdate()
+	}()
+
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(payload)
 }
@@ -143,6 +163,22 @@ func (c *TicketController) ApproveTicket(w http.ResponseWriter, r *http.Request)
 		"Ticket approved until "+validUntil.Format(time.RFC3339),
 	)
 
+	// Create user notification and update counts
+	go func() {
+		var requesterID, serverID string
+		_ = c.db.QueryRow(`SELECT requesterid, CONVERT(VARCHAR(36), serverid) FROM dbo.Ticket WHERE id = @p1`, id).Scan(&requesterID, &serverID)
+
+		var srvName string
+		_ = c.db.QueryRow(`SELECT hostname FROM dbo.Server WHERE id = @p1`, serverID).Scan(&srvName)
+		if srvName == "" {
+			srvName = serverID
+		}
+
+		msg := fmt.Sprintf("Your access ticket for server '%s' has been APPROVED until %s.", srvName, validUntil.Local().Format("2006-01-02 15:04:05"))
+		_ = AddNotification(c.db, requesterID, "Access Ticket Approved", msg, "/assigned-servers")
+		BroadcastPendingCountsUpdate()
+	}()
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":    "Ticket approved successfully",
@@ -195,6 +231,22 @@ func (c *TicketController) DenyTicket(w http.ResponseWriter, r *http.Request) {
 		r.RemoteAddr, "Success", "Warning",
 		"Ticket denied. Reason: "+payload.Reason,
 	)
+
+	// Create user notification and update counts
+	go func() {
+		var requesterID, serverID string
+		_ = c.db.QueryRow(`SELECT requesterid, CONVERT(VARCHAR(36), serverid) FROM dbo.Ticket WHERE id = @p1`, id).Scan(&requesterID, &serverID)
+
+		var srvName string
+		_ = c.db.QueryRow(`SELECT hostname FROM dbo.Server WHERE id = @p1`, serverID).Scan(&srvName)
+		if srvName == "" {
+			srvName = serverID
+		}
+
+		msg := fmt.Sprintf("Your access ticket for server '%s' was DENIED. Reason: %s", srvName, payload.Reason)
+		_ = AddNotification(c.db, requesterID, "Access Ticket Denied", msg, "/tickets")
+		BroadcastPendingCountsUpdate()
+	}()
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Ticket denied"})

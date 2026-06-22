@@ -7,18 +7,19 @@ import StandardModal from '../../components/standard-modal/StandardModal'
 import './SignInPage.css'
 
 function SignInPage() {
-  const [view, setView] = useState('login') // 'login', 'forgot-request', 'forgot-verify'
+  const [view, setView] = useState('login') // 'login', 'recover'
   const [formData, setFormData] = useState({
     userId: '',
     password: ''
   })
   
-  // Forgot Password / Self-Service Reset states
-  const [resetEmail, setResetEmail] = useState('')
-  const [resetCode, setResetCode] = useState('')
-  const [resetNewPassword, setResetNewPassword] = useState('')
-  const [resetConfirmPassword, setResetConfirmPassword] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
+  // Account Recovery states (No-Email passwordless check)
+  const [recoverFirstName, setRecoverFirstName] = useState('')
+  const [recoverLastName, setRecoverLastName] = useState('')
+  const [recoverEmail, setRecoverEmail] = useState('')
+  const [recoverNewPassword, setRecoverNewPassword] = useState('')
+  const [recoverConfirmPassword, setRecoverConfirmPassword] = useState('')
+  const [resetSuccessMsg, setResetSuccessMsg] = useState('')
   const [loading, setLoading] = useState(false)
 
   const [errorMessage, setErrorMessage] = useState('')
@@ -63,7 +64,6 @@ function SignInPage() {
 
       if (res.ok) {
         const userData = await res.json()
-        // Fetch the role name from user_roles
         const roleRes = await fetch(`http://localhost:8080/api/user-roles/${userData.userRoleId}`)
         let roleName = 'USER'
         if (roleRes.ok) {
@@ -81,71 +81,43 @@ function SignInPage() {
     }
   }
 
-  const handleRequestResetCode = async (e) => {
+  const handleRecoverAccount = async (e) => {
     e.preventDefault()
-    if (!resetEmail.trim()) {
-      setErrorMessage('Please enter your email address.')
+    if (!recoverFirstName.trim() || !recoverLastName.trim() || !recoverEmail.trim()) {
+      setErrorMessage('First name, last name, and email are required.')
       return
     }
-    setLoading(true)
-    setErrorMessage('')
-    setSuccessMessage('')
-    try {
-      const res = await fetch('http://localhost:8080/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail.trim() })
-      })
-      if (res.ok) {
-        setSuccessMessage('A 6-digit verification code has been dispatched. Check your inbox (or backend log).')
-        setView('forgot-verify')
-      } else {
-        const txt = await res.text()
-        setErrorMessage(txt || 'No active account matches this email.')
-      }
-    } catch (err) {
-      setErrorMessage('Failed to request recovery code.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleVerifyAndResetPassword = async (e) => {
-    e.preventDefault()
-    if (!resetCode.trim() || !resetNewPassword.trim() || !resetConfirmPassword.trim()) {
-      setErrorMessage('Please fill out all fields.')
-      return
-    }
-    if (resetNewPassword !== resetConfirmPassword) {
+    if (recoverNewPassword && recoverNewPassword !== recoverConfirmPassword) {
       setErrorMessage('Passwords do not match.')
       return
     }
     setLoading(true)
     setErrorMessage('')
-    setSuccessMessage('')
+    setResetSuccessMsg('')
     try {
-      const res = await fetch('http://localhost:8080/api/auth/reset-password-verify', {
+      const res = await fetch('http://localhost:8080/api/auth/recover-account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: resetEmail.trim(),
-          code: resetCode.trim(),
-          newPassword: resetNewPassword.trim()
+          firstName: recoverFirstName.trim(),
+          lastName: recoverLastName.trim(),
+          email: recoverEmail.trim(),
+          newPassword: recoverNewPassword.trim()
         })
       })
       if (res.ok) {
-        alert('Password successfully reset! You can now log in.')
-        setResetEmail('')
-        setResetCode('')
-        setResetNewPassword('')
-        setResetConfirmPassword('')
-        setView('login')
+        const data = await res.json()
+        if (data.passwordReset) {
+          setResetSuccessMsg(`Recovery successful! Your Username/UserID is "${data.userId}" and your password has been updated.`)
+        } else {
+          setResetSuccessMsg(`Recovery successful! Your Username/UserID is "${data.userId}".`)
+        }
       } else {
         const txt = await res.text()
-        setErrorMessage(txt || 'Invalid or expired verification code.')
+        setErrorMessage(txt || 'No active account matches the details provided.')
       }
     } catch (err) {
-      setErrorMessage('Failed to reset password.')
+      setErrorMessage('Failed to connect to recovery service.')
     } finally {
       setLoading(false)
     }
@@ -201,8 +173,8 @@ function SignInPage() {
 
             {setupCompleted && (
               <div className="links links-split">
-                <a className="link" href="#" onClick={(e) => { e.preventDefault(); setView('forgot-request'); setErrorMessage(''); setSuccessMessage(''); }}>
-                  Forgot password?
+                <a className="link" href="#" onClick={(e) => { e.preventDefault(); setView('recover'); setErrorMessage(''); setResetSuccessMsg(''); setRecoverFirstName(''); setRecoverLastName(''); setRecoverEmail(''); setRecoverNewPassword(''); setRecoverConfirmPassword(''); }}>
+                  Forgot Username/Password?
                 </a>
                 <Link className="link" to="/request-support?type=signup">Need an account? Request access</Link>
               </div>
@@ -210,104 +182,104 @@ function SignInPage() {
           </form>
         )}
 
-        {view === 'forgot-request' && (
-          <form className="auth-card auth-card--signin" onSubmit={handleRequestResetCode}>
+        {view === 'recover' && (
+          <form className="auth-card auth-card--signin" onSubmit={handleRecoverAccount} style={{ maxWidth: '400px', width: '90vw' }}>
             <div className="auth-header brand-stack">
-              <h2>Password Recovery</h2>
+              <h2>Account Recovery</h2>
               <p style={{ fontSize: '0.8rem', opacity: 0.7, textAlign: 'center', marginTop: '0.2rem' }}>
-                Enter your email address to receive a secure recovery code.
+                Verify your profile details to recover your UserID or reset your password.
               </p>
             </div>
 
-            <div className="field">
-              <label htmlFor="resetEmail">Email Address</label>
-              <input
-                id="resetEmail"
-                type="email"
-                placeholder="Enter your registered email"
-                value={resetEmail}
-                onChange={(e) => setResetEmail(e.target.value)}
-                required
-              />
-            </div>
-
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Sending Code...' : 'Send Verification Code'}
-            </button>
-
-            <div className="links links-column" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center', marginTop: '1rem' }}>
-              <a className="link" href="#" onClick={(e) => { e.preventDefault(); setView('login'); setErrorMessage(''); setSuccessMessage(''); }}>
-                ← Back to Sign In
-              </a>
-              <Link className="link" to="/request-support?type=reset" style={{ fontSize: '0.8rem', opacity: 0.6 }}>
-                Need administrator assistance?
-              </Link>
-            </div>
-          </form>
-        )}
-
-        {view === 'forgot-verify' && (
-          <form className="auth-card auth-card--signin" onSubmit={handleVerifyAndResetPassword}>
-            <div className="auth-header brand-stack">
-              <h2>Reset Password</h2>
-              <p style={{ fontSize: '0.8rem', opacity: 0.7, textAlign: 'center', marginTop: '0.2rem' }}>
-                Verify your identity and specify your new account password.
-              </p>
-            </div>
-
-            {successMessage && (
-              <div style={{ color: '#a8ffca', fontSize: '0.8rem', background: 'rgba(0,255,0,0.06)', padding: '0.5rem', borderRadius: '4px', textAlign: 'center', marginBottom: '0.5rem' }}>
-                ✓ {successMessage}
+            {resetSuccessMsg && (
+              <div style={{ color: '#a8ffca', fontSize: '0.82rem', background: 'rgba(0,255,0,0.06)', border: '1px solid rgba(0,255,0,0.15)', padding: '0.8rem', borderRadius: '6px', textAlign: 'center', marginBottom: '1rem', lineHeight: 1.4 }}>
+                ✓ {resetSuccessMsg}
               </div>
             )}
 
             <div className="field">
-              <label htmlFor="resetCode">6-Digit Verification Code</label>
+              <label htmlFor="recoverFirstName">First Name</label>
               <input
-                id="resetCode"
+                id="recoverFirstName"
                 type="text"
-                maxLength="6"
-                placeholder="Enter 6-digit code"
-                value={resetCode}
-                onChange={(e) => setResetCode(e.target.value)}
+                placeholder="Enter your first name"
+                value={recoverFirstName}
+                onChange={(e) => setRecoverFirstName(e.target.value)}
                 required
+                disabled={Boolean(resetSuccessMsg)}
               />
             </div>
 
             <div className="field">
-              <label htmlFor="resetNewPassword">New Password</label>
+              <label htmlFor="recoverLastName">Last Name</label>
               <input
-                id="resetNewPassword"
-                type="password"
-                placeholder="Enter new password"
-                value={resetNewPassword}
-                onChange={(e) => setResetNewPassword(e.target.value)}
+                id="recoverLastName"
+                type="text"
+                placeholder="Enter your last name"
+                value={recoverLastName}
+                onChange={(e) => setRecoverLastName(e.target.value)}
                 required
+                disabled={Boolean(resetSuccessMsg)}
               />
             </div>
 
             <div className="field">
-              <label htmlFor="resetConfirmPassword">Confirm New Password</label>
+              <label htmlFor="recoverEmail">Email Address</label>
               <input
-                id="resetConfirmPassword"
-                type="password"
-                placeholder="Confirm new password"
-                value={resetConfirmPassword}
-                onChange={(e) => setResetConfirmPassword(e.target.value)}
+                id="recoverEmail"
+                type="email"
+                placeholder="Enter your registered email"
+                value={recoverEmail}
+                onChange={(e) => setRecoverEmail(e.target.value)}
                 required
+                disabled={Boolean(resetSuccessMsg)}
               />
             </div>
 
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Resetting Password...' : 'Reset Password'}
-            </button>
+            {!resetSuccessMsg && (
+              <>
+                <div style={{ margin: '1rem 0 0.5rem 0', height: '1px', background: 'rgba(255,255,255,0.08)' }} />
+                <p style={{ fontSize: '0.75rem', color: '#ffcb42', opacity: 0.8, marginBottom: '0.5rem' }}>
+                  🔒 Optional: Enter a new password to reset it.
+                </p>
 
-            <div className="links links-column" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center', marginTop: '1rem' }}>
-              <a className="link" href="#" onClick={(e) => { e.preventDefault(); setView('login'); setErrorMessage(''); setSuccessMessage(''); }}>
+                <div className="field">
+                  <label htmlFor="recoverNewPassword">New Password (Optional)</label>
+                  <input
+                    id="recoverNewPassword"
+                    type="password"
+                    placeholder="Enter new password"
+                    value={recoverNewPassword}
+                    onChange={(e) => setRecoverNewPassword(e.target.value)}
+                  />
+                </div>
+
+                <div className="field">
+                  <label htmlFor="recoverConfirmPassword">Confirm New Password</label>
+                  <input
+                    id="recoverConfirmPassword"
+                    type="password"
+                    placeholder="Confirm new password"
+                    value={recoverConfirmPassword}
+                    onChange={(e) => setRecoverConfirmPassword(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+
+            {!resetSuccessMsg ? (
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Verifying Details...' : 'Recover Account'}
+              </button>
+            ) : (
+              <button type="button" className="btn btn-primary" onClick={() => setView('login')}>
+                Go to Sign In
+              </button>
+            )}
+
+            <div className="links" style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+              <a className="link" href="#" onClick={(e) => { e.preventDefault(); setView('login'); setErrorMessage(''); setResetSuccessMsg(''); }}>
                 ← Back to Sign In
-              </a>
-              <a className="link" href="#" onClick={handleRequestResetCode} style={{ fontSize: '0.8rem', opacity: 0.6 }}>
-                Resend Code
               </a>
             </div>
           </form>
@@ -316,7 +288,7 @@ function SignInPage() {
 
       <StandardModal
         isOpen={Boolean(errorMessage)}
-        title="Sign In Error"
+        title="Account Recovery"
         message={errorMessage}
         onClose={() => setErrorMessage('')}
       />
