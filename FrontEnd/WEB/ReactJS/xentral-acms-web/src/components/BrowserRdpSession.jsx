@@ -220,9 +220,9 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
         setLogs((prev) => {
           if (!prev.some(l => l.includes('[FAILURE]'))) {
             setFailed(true);
-            setFailReason("Session disconnected. The remote connection has been terminated.");
+            setFailReason("Session disconnected or terminated. Another user may have connected, or the session has ended.");
             setLoading(true);
-            return [...prev, '[FAILURE] Session disconnected. The remote connection has been terminated.'];
+            return [...prev, '[FAILURE] Session disconnected or terminated. (Another user may have connected, or the session has ended.)'];
           }
           return prev;
         });
@@ -353,7 +353,7 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
             )}
             
             <h3 style={{ margin: 0, color: failed ? '#ef4444' : '#ffcb42', letterSpacing: '1px', textTransform: 'uppercase' }}>
-              {failed ? 'RDP CONNECTION FAILED' : 'ESTABLISHING RDP GATEWAY CONNECTION'}
+              {failed ? (failReason.toLowerCase().includes('disconnected') || failReason.toLowerCase().includes('terminated') ? 'RDP SESSION TERMINATED' : 'RDP CONNECTION FAILED') : 'ESTABLISHING RDP GATEWAY CONNECTION'}
             </h3>
             
             <div style={{
