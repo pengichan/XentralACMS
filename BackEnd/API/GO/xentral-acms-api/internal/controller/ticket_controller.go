@@ -95,7 +95,7 @@ func (c *TicketController) RequestAccess(w http.ResponseWriter, r *http.Request)
 		}
 
 		msg := fmt.Sprintf("User '%s' requested access to server '%s' (%s). Reason: %s", reqName, srvName, payload.Urgency, payload.Reason)
-		_ = AddNotification(c.db, "ROLE_ADMIN", "New Access Ticket Request", msg, "/tickets")
+		_ = AddNotification(c.db, "ROLE_ADMIN", "New Access Ticket Request", msg, "/tickets/"+payload.ID)
 		BroadcastPendingCountsUpdate()
 	}()
 
@@ -137,6 +137,12 @@ func (c *TicketController) ApproveTicket(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	_, _ = c.db.Exec(`
+		UPDATE dbo.notifications
+		SET is_read = 1
+		WHERE link = @p1
+	`, "/tickets/"+id)
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
@@ -214,6 +220,12 @@ func (c *TicketController) DenyTicket(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	_, _ = c.db.Exec(`
+		UPDATE dbo.notifications
+		SET is_read = 1
+		WHERE link = @p1
+	`, "/tickets/"+id)
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

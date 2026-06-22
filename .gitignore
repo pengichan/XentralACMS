@@ -17,3 +17,6 @@ Thumbs.db
 
 # Log files
 *.log
+
+# Upload storage
+BackEnd/API/GO/xentral-acms-api/shared_uploads/

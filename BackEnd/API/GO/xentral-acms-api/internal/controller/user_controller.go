@@ -1139,7 +1139,7 @@ func (c *UserController) RequestAccountSupport(w http.ResponseWriter, r *http.Re
 	// Notify admins and broadcast counts
 	go func() {
 		msg := fmt.Sprintf("New account support request ('%s') from %s %s.", payload.RequestType, payload.FirstName, payload.LastName)
-		_ = AddNotification(c.db, "ROLE_ADMIN", "Account Support Request", msg, "/account-requests")
+		_ = AddNotification(c.db, "ROLE_ADMIN", "Account Support Request", msg, "/account-requests/"+requestID)
 		BroadcastPendingCountsUpdate()
 	}()
 
@@ -1282,6 +1282,12 @@ func (c *UserController) ApproveAccountRequest(w http.ResponseWriter, r *http.Re
 			return
 		}
 
+		_, _ = c.db.Exec(`
+			UPDATE dbo.notifications
+			SET is_read = 1
+			WHERE link = @p1
+		`, "/account-requests/"+id)
+
 		// Send reset welcome email
 		if c.mailer != nil {
 			subject := "Xentral ACMS - Password Reset Approved"
@@ -1357,6 +1363,12 @@ func (c *UserController) ApproveAccountRequest(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	_, _ = c.db.Exec(`
+		UPDATE dbo.notifications
+		SET is_read = 1
+		WHERE link = @p1
+	`, "/account-requests/"+id)
+
 	// Send Welcome Email
 	if c.mailer != nil {
 		subject := "Welcome to Xentral ACMS - Account Request Approved"
@@ -1420,6 +1432,12 @@ func (c *UserController) DenyAccountRequest(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	_, _ = c.db.Exec(`
+		UPDATE dbo.notifications
+		SET is_read = 1
+		WHERE link = @p1
+	`, "/account-requests/"+id)
 
 	// Send Denial Email
 	if c.mailer != nil {

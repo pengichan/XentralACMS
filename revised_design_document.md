@@ -501,6 +501,8 @@ To elevate the utility and security of the prototype beyond the initial basic re
 * **Key Features**:
   * **Notification Database (`dbo.notifications`)**: Stores user-specific notifications and role-based group alerts (such as `ROLE_ADMIN`).
   * **Header Bell Dropdown Panel**: Admins see live ticket requests and can click **Approve** or **Deny** buttons directly within the notification list, calling backend approval endpoints natively.
+  * **Real-time Synced Action State**: When a ticket or support request is approved or denied, the backend automatically updates matching notifications in the database to `is_read = 1`. The frontend bell panel listens to SSE `pending_counts_update` messages and automatically refetches notifications, immediately hiding Approve/Deny buttons for read items and maintaining real-time synchronization.
+  * **Link Redirect Alignment**: Resolves navigation routing issues by mapping target links (like `/tickets` or `/tickets/:id`, `/assigned-servers`, `/account-requests`) to their proper active React Router paths (`/pam/tickets`, `/pam/assigned-servers`, `/pam/users`).
 
 ### 23.14 Audited Shared File Box Portal
 * **Design Decision**: Established a secure shared file transfer utility inside XentralACMS.
@@ -508,6 +510,15 @@ To elevate the utility and security of the prototype beyond the initial basic re
   * **Audited Uploads/Downloads**: Tracks file transfers in the database table `dbo.shared_files` and outputs High-severity `AuditLog` records for all uploads and downloads.
   * **Bi-directional RDP Copy-Paste Bypass**: Users can drop files from their local PC into the File Box web portal, and retrieve them by opening the portal browser inside the remote RDP desktop session (and vice versa).
 
+### 23.15 Native RDP Client Launch & Clipboard Bypass
+* **Design Decision**: Provided a native Remote Desktop Connection shortcut option for users experiencing screen lag or performance bottlenecks in the browser HTML5 canvas client.
+* **Key Features**:
+  * **Telemetry Propagated RDP File**: Propagates the generated `.rdp` connection profile dynamically down to the `BrowserRdpSession` component viewport.
+  * **Control Bar Shortcut**: Adds a prominent "Download Native RDP" button directly onto the browser RDP viewport control bar, allowing users to transition to `mstsc.exe` with a single click.
+  * **Clip-Copy Credentials**: Automatically saves the dynamically generated session password to the local clipboard when the `.rdp` file is downloaded, allowing instant login pasting.
 
-
-
+### 23.16 Audited Shared File Box Retrieve/Send Workflow
+* **Design Decision**: Outlined instructions for exchanging files between the local host PC and the target remote RDP desktop using the secure air-gapped web portal.
+* **Key Features**:
+  * **Sending to Target RDP PC**: Drag-drop or upload files into the "Shared File Box" in your local browser window. Once uploaded, log into the XentralACMS portal *inside* the RDP session's web browser, navigate to the Shared File Box tab, and click **Download** to retrieve it locally.
+  * **Retrieving from Target RDP PC**: Inside the RDP session's browser, upload the desired file to the Shared File Box portal. Then, go to the Shared File Box page on your host PC's browser and click **Download** to save it to your local machine.

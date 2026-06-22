@@ -37,10 +37,11 @@ export default function NotificationBell() {
         if (payload.type === 'new_notification') {
           // If message is for this user OR role ADMIN for Admins
           if (payload.userId === user.id || (payload.userId === 'ROLE_ADMIN' && isAdmin)) {
-            // Play subtle alert sound if possible, or just refetch notifications
             fetchNotifications();
             window.dispatchEvent(new CustomEvent('xentral_events_update', { detail: payload }));
           }
+        } else if (payload.type === 'pending_counts_update') {
+          fetchNotifications();
         }
       } catch (err) {
         // Ping
@@ -85,7 +86,15 @@ export default function NotificationBell() {
     }
     setIsOpen(false);
     if (notif.link) {
-      navigate(notif.link);
+      let targetLink = notif.link;
+      if (targetLink.startsWith('/tickets')) {
+        targetLink = '/pam/tickets';
+      } else if (targetLink.startsWith('/assigned-servers')) {
+        targetLink = '/pam/assigned-servers';
+      } else if (targetLink.startsWith('/account-requests')) {
+        targetLink = '/pam/users';
+      }
+      navigate(targetLink);
     }
   };
 
@@ -93,9 +102,10 @@ export default function NotificationBell() {
     e.stopPropagation();
     try {
       const endpoint = action === 'approve' ? 'approve' : 'deny';
+      const appID = user?.userId || user?.id || '';
       const body = action === 'approve' 
-        ? { approverId: user.userId, durationHours: 2 } 
-        : { approverId: user.userId, reason: 'Declined via Notification Center' };
+        ? { approverId: appID, durationHours: 2 } 
+        : { approverId: appID, reason: 'Declined via Notification Center' };
 
       const res = await fetch(`http://localhost:8080/api/tickets/${ticketId}/${endpoint}`, {
         method: 'POST',
@@ -119,7 +129,9 @@ export default function NotificationBell() {
   const getTicketIdFromLink = (link) => {
     if (!link) return null;
     const parts = link.split('/');
-    return parts[parts.length - 1];
+    const lastPart = parts[parts.length - 1];
+    if (lastPart === 'tickets' || lastPart === 'account-requests' || lastPart === '') return null;
+    return lastPart;
   };
 
   return (
@@ -170,7 +182,7 @@ export default function NotificationBell() {
           position: 'absolute',
           top: '48px',
           right: 0,
-          width: '360px',
+          width: '400px',
           background: 'rgba(10, 16, 32, 0.95)',
           backdropFilter: 'blur(20px)',
           border: '1px solid rgba(255,255,255,0.12)',
@@ -257,19 +269,28 @@ export default function NotificationBell() {
                       </span>
 
                       {/* Admin Quick Ticket Actions inside notification list */}
-                      {isAdmin && isPendingTicket && ticketId && (
+                      {isAdmin && isPendingTicket && ticketId && !notif.isRead && (
                         <div style={{ display: 'flex', gap: '8px' }} onClick={e => e.stopPropagation()}>
                           <button
                             onClick={(e) => handleAction(ticketId, 'approve', e)}
                             style={{
-                              background: '#10b981',
-                              color: '#fff',
-                              border: 'none',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              fontSize: '0.68rem',
+                              background: 'rgba(16, 185, 129, 0.15)',
+                              color: '#a8ffca',
+                              border: '1px solid rgba(16, 185, 129, 0.35)',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '0.7rem',
                               fontWeight: 'bold',
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'rgba(16, 185, 129, 0.3)';
+                              e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'rgba(16, 185, 129, 0.15)';
+                              e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.35)';
                             }}
                           >
                             Approve
@@ -277,14 +298,23 @@ export default function NotificationBell() {
                           <button
                             onClick={(e) => handleAction(ticketId, 'deny', e)}
                             style={{
-                              background: '#ef4444',
-                              color: '#fff',
-                              border: 'none',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              fontSize: '0.68rem',
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              color: '#ffcaca',
+                              border: '1px solid rgba(239, 68, 68, 0.35)',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '0.7rem',
                               fontWeight: 'bold',
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.3)';
+                              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.35)';
                             }}
                           >
                             Deny

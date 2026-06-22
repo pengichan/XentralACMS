@@ -589,6 +589,7 @@ export default function ServerDetails() {
                       ticketId: activeTicket?.id || null,
                       serverId: id || null,
                       userId: user?.userId || null,
+                      rdpFile: rdpData.rdpFile || null,
                     });
                     setConnectionState(null);
                   }} className="pam-button">🔌 Connect in Browser</button>
@@ -626,6 +627,7 @@ export default function ServerDetails() {
           ticketId={activeSession.ticketId}
           serverId={activeSession.serverId}
           userId={activeSession.userId}
+          rdpFile={activeSession.rdpFile}
           onClose={() => setActiveSession(null)}
         />
       )}

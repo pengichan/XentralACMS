@@ -274,6 +274,7 @@ export default function AssignedServers() {
                       ticketId: selectedServer?.ticketId || null,
                       serverId: selectedServer?.id || null,
                       userId: user?.userId || null,
+                      rdpFile: rdpData.rdpFile || null,
                     });
                     setConnectionState(null);
                   }} className="pam-button">🔌 Connect in Browser</button>
@@ -311,6 +312,7 @@ export default function AssignedServers() {
           ticketId={activeSession.ticketId}
           serverId={activeSession.serverId}
           userId={activeSession.userId}
+          rdpFile={activeSession.rdpFile}
           onClose={() => setActiveSession(null)}
         />
       )}

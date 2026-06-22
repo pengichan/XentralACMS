@@ -110,25 +110,8 @@ function App() {
                 <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.45)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
                   XentralACMS Portal
                 </span>
-                <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.15)' }} />
-                <span style={{
-                  padding: '0.2rem 0.6rem',
-                  borderRadius: '6px',
-                  background: 'rgba(79, 172, 254, 0.08)',
-                  border: '1px solid rgba(79, 172, 254, 0.25)',
-                  color: '#4facfe',
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.5px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}>
-                  <span className="blue-pulse-dot" style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4facfe', display: 'inline-block' }} />
-                  ENTERPRISE NODE
-                </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: '#a8ffca', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.15)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontWeight: 600, letterSpacing: '0.3px' }}>
                   <span className="secure-pulse-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
                   SECURE TUNNEL: ACTIVE

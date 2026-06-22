@@ -54,7 +54,7 @@ function formatCountdown(totalSeconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export default function BrowserRdpSession({ hostname, ipAddress, username, password, token, validUntil, ticketId, serverId, userId, onClose }) {
+export default function BrowserRdpSession({ hostname, ipAddress, username, password, token, validUntil, ticketId, serverId, userId, rdpFile, onClose }) {
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState([]);
   const [failed, setFailed] = useState(false);
@@ -117,6 +117,22 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
     } catch (e) {
       console.error("Error generating external token:", e);
       alert("Error initiating external RDP session.");
+    }
+  };
+
+  const downloadRDP = () => {
+    if (!rdpFile) return;
+    const blob = new Blob([rdpFile], { type: 'application/x-rdp' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${hostname || 'server'}.rdp`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    if (password) {
+      navigator.clipboard.writeText(password);
     }
   };
 
@@ -307,6 +323,27 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
             )}
             <span style={{ opacity: 0.3 }}>|</span>
             <span style={{ opacity: 0.7 }}>SSO Tunnel: <strong style={{ color: '#a8ffca' }}>{username}</strong></span>
+            {rdpFile && (
+              <button 
+                onClick={downloadRDP} 
+                style={{ 
+                  background: 'rgba(79, 172, 254, 0.15)', 
+                  border: '1px solid rgba(79, 172, 254, 0.4)', 
+                  color: '#4facfe', 
+                  padding: '0.3rem 0.8rem', 
+                  borderRadius: '4px', 
+                  cursor: 'pointer', 
+                  fontSize: '0.72rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontWeight: 'bold',
+                  marginRight: '8px'
+                }}
+              >
+                ⬇ Download Native RDP
+              </button>
+            )}
             <button 
               onClick={handleOpenExternal} 
               style={{ 

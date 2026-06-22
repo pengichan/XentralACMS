@@ -331,6 +331,17 @@ export default function ServerManagement() {
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
+  const splitDateTime = (dtStr) => {
+    if (!dtStr) return { date: '', time: '' };
+    const parts = dtStr.split('T');
+    return { date: parts[0] || '', time: parts[1] || '' };
+  };
+
+  const joinDateTime = (date, time) => {
+    if (!date) return '';
+    return `${date}T${time || '00:00'}`;
+  };
+
   const SHORTCUT_BTN_STYLE = {
     padding: '0.25rem 0.5rem',
     borderRadius: '4px',

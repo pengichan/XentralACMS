@@ -801,6 +801,7 @@ export default function TicketingDashboard() {
                       ticketId: rdpData._ticketId || null,
                       serverId: rdpData._serverId || null,
                       userId: user?.userId || null,
+                      rdpFile: rdpData.rdpFile || null,
                     });
                     setConnectionState(null);
                   }} className="pam-button">🔌 Connect in Browser</button>
@@ -1142,6 +1143,7 @@ export default function TicketingDashboard() {
           ticketId={activeSession.ticketId}
           serverId={activeSession.serverId}
           userId={activeSession.userId}
+          rdpFile={activeSession.rdpFile}
           onClose={() => setActiveSession(null)}
         />
       )}
