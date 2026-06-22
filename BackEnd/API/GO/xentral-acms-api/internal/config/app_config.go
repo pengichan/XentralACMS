@@ -9,6 +9,9 @@ import (
 
 // GetDatabaseConnectionString reads appsetting.config and returns [database].connection_string.
 func GetDatabaseConnectionString(configPath string) (string, error) {
+	if envConn := os.Getenv("XENTRAL_DB_CONNECTION"); envConn != "" {
+		return envConn, nil
+	}
 	file, err := os.Open(configPath)
 	if err != nil {
 		return "", fmt.Errorf("open config: %w", err)
