@@ -72,7 +72,7 @@ export default function TicketingDashboard() {
 
   // Edit / Revoke access states
   const [editModal, setEditModal] = useState(null);
-  const [editForm, setEditForm] = useState({ validUntil: '', assignedCredentialId: '' });
+  const [editForm, setEditForm] = useState({ validFrom: '', validUntil: '', assignedCredentialId: '' });
   const [editCredentials, setEditCredentials] = useState([]);
 
   const ADMIN_ROLE_IDS = ['11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000001'];
@@ -92,6 +92,116 @@ export default function TicketingDashboard() {
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
+  const splitDateTime = (dtStr) => {
+    if (!dtStr) return { date: '', time: '' };
+    const parts = dtStr.split('T');
+    return { date: parts[0] || '', time: parts[1] || '' };
+  };
+
+  const joinDateTime = (date, time) => {
+    if (!date) return '';
+    return `${date}T${time || '00:00'}`;
+  };
+
+  const SHORTCUT_BTN_STYLE = {
+    padding: '0.25rem 0.5rem',
+    borderRadius: '4px',
+    background: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: '0.72rem',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    outline: 'none',
+    marginTop: '0.25rem',
+  };
+
+  const handleMouseEnterShortcut = (e) => {
+    e.currentTarget.style.background = 'rgba(79, 172, 254, 0.15)';
+    e.currentTarget.style.borderColor = 'rgba(79, 172, 254, 0.4)';
+    e.currentTarget.style.color = '#4facfe';
+  };
+
+  const handleMouseLeaveShortcut = (e) => {
+    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+    e.currentTarget.style.color = 'rgba(255, 255, 255, 0.7)';
+  };
+
+  const setApproveStart = (newStart) => {
+    const newStartStr = toLocalFromISO(newStart.toISOString());
+    setApproveForm(prev => {
+      const newEnd = new Date(newStart.getTime() + Number(prev.durationHours) * 3600000);
+      return {
+        ...prev,
+        approvedFrom: newStartStr,
+        approvedUntil: toLocalFromISO(newEnd.toISOString())
+      };
+    });
+  };
+
+  const setApproveEndOffset = (hours) => {
+    setApproveForm(prev => {
+      const startDt = new Date(prev.approvedFrom || Date.now());
+      const newEnd = new Date(startDt.getTime() + hours * 3600000);
+      return {
+        ...prev,
+        durationHours: hours,
+        approvedUntil: toLocalFromISO(newEnd.toISOString())
+      };
+    });
+  };
+
+  const setGrantStart = (newStart) => {
+    const newStartStr = toLocalFromISO(newStart.toISOString());
+    setGrantForm(prev => {
+      const newEnd = new Date(newStart.getTime() + Number(prev.durationHours) * 3600000);
+      return {
+        ...prev,
+        approvedFrom: newStartStr,
+        approvedUntil: toLocalFromISO(newEnd.toISOString())
+      };
+    });
+  };
+
+  const setGrantEndOffset = (hours) => {
+    setGrantForm(prev => {
+      const startDt = new Date(prev.approvedFrom || Date.now());
+      const newEnd = new Date(startDt.getTime() + hours * 3600000);
+      return {
+        ...prev,
+        durationHours: hours,
+        approvedUntil: toLocalFromISO(newEnd.toISOString())
+      };
+    });
+  };
+
+  const setEditStart = (newStart) => {
+    const newStartStr = toLocalFromISO(newStart.toISOString());
+    setEditForm(prev => {
+      const currentStart = new Date(prev.validFrom || Date.now());
+      const currentEnd = new Date(prev.validUntil || Date.now());
+      const durationMs = Math.max(0, currentEnd.getTime() - currentStart.getTime());
+      const newEnd = new Date(newStart.getTime() + durationMs);
+      return {
+        ...prev,
+        validFrom: newStartStr,
+        validUntil: toLocalFromISO(newEnd.toISOString())
+      };
+    });
+  };
+
+  const setEditEndOffset = (hours) => {
+    setEditForm(prev => {
+      const startDt = new Date(prev.validFrom || Date.now());
+      const newEnd = new Date(startDt.getTime() + hours * 3600000);
+      return {
+        ...prev,
+        validUntil: toLocalFromISO(newEnd.toISOString())
+      };
+    });
+  };
+
   const fetchTickets = useCallback(async () => {
     setLoading(true);
     try {
@@ -105,6 +215,16 @@ export default function TicketingDashboard() {
   }, [isAdmin, user?.userId]);
 
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
+
+  useEffect(() => {
+    const handleEventsUpdate = () => {
+      fetchTickets();
+    };
+    window.addEventListener('xentral_events_update', handleEventsUpdate);
+    return () => {
+      window.removeEventListener('xentral_events_update', handleEventsUpdate);
+    };
+  }, [fetchTickets]);
 
   useEffect(() => {
     if (approveModal?.serverId) {
@@ -325,11 +445,13 @@ export default function TicketingDashboard() {
   const handleEditAccess = async () => {
     if (!editModal || !editForm.validUntil) return;
     const validUntilISO = toISOFromLocal(editForm.validUntil);
+    const validFromISO = toISOFromLocal(editForm.validFrom);
     try {
       const res = await fetch(`${API}/api/tickets/${editModal.id}/modify`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           validUntil: validUntilISO, 
+          validFrom: validFromISO || undefined,
           approverId: user?.userId || 'ADMIN',
           assignedCredentialId: editForm.assignedCredentialId
         }),
@@ -451,7 +573,7 @@ export default function TicketingDashboard() {
                               <>
                                 {(active || isTicketUpcoming(t)) ? (
                                   <>
-                                    <button onClick={() => { setEditModal(t); setEditForm({ validUntil: toLocalFromISO(t.validUntilStr), assignedCredentialId: t.assignedCredentialID || '' }); }} className="pam-action-btn pam-btn-edit">
+                                    <button onClick={() => { setEditModal(t); setEditForm({ validFrom: toLocalFromISO(t.validFromStr), validUntil: toLocalFromISO(t.validUntilStr), assignedCredentialId: t.assignedCredentialID || '' }); }} className="pam-action-btn pam-btn-edit">
                                       ✏️ Edit
                                     </button>
                                     <button onClick={() => handleRevokeAccess(t)} className="pam-action-btn pam-btn-revoke">
@@ -509,13 +631,38 @@ export default function TicketingDashboard() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
               <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>Start Access From</label>
-              <input className="pam-input" type="datetime-local"
-                value={approveForm.approvedFrom} onChange={e => {
-                  const val = e.target.value;
-                  const newStart = new Date(val);
-                  const newEnd = new Date(newStart.getTime() + Number(approveForm.durationHours) * 3600000);
-                  setApproveForm({ ...approveForm, approvedFrom: val, approvedUntil: toLocalFromISO(newEnd.toISOString()) });
-                }} />
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input className="pam-input" type="date"
+                  value={splitDateTime(approveForm.approvedFrom).date}
+                  onChange={e => {
+                    const newDate = e.target.value;
+                    const newTime = splitDateTime(approveForm.approvedFrom).time || '00:00';
+                    const val = joinDateTime(newDate, newTime);
+                    const newStart = new Date(val);
+                    const newEnd = new Date(newStart.getTime() + Number(approveForm.durationHours) * 3600000);
+                    setApproveForm({ ...approveForm, approvedFrom: val, approvedUntil: toLocalFromISO(newEnd.toISOString()) });
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <input className="pam-input" type="time"
+                  value={splitDateTime(approveForm.approvedFrom).time}
+                  onChange={e => {
+                    const newDate = splitDateTime(approveForm.approvedFrom).date || new Date().toISOString().split('T')[0];
+                    const newTime = e.target.value;
+                    const val = joinDateTime(newDate, newTime);
+                    const newStart = new Date(val);
+                    const newEnd = new Date(newStart.getTime() + Number(approveForm.durationHours) * 3600000);
+                    setApproveForm({ ...approveForm, approvedFrom: val, approvedUntil: toLocalFromISO(newEnd.toISOString()) });
+                  }}
+                  style={{ flex: 1 }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setApproveStart(new Date())}>Now</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setApproveStart(new Date(Date.now() + 30 * 60000))}>+30m</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setApproveStart(new Date(Date.now() + 60 * 60000))}>+1h</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setApproveStart(new Date(Date.now() + 120 * 60000))}>+2h</button>
+              </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -531,14 +678,41 @@ export default function TicketingDashboard() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
               <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>Approved Until</label>
-              <input className="pam-input" type="datetime-local"
-                value={approveForm.approvedUntil} onChange={e => {
-                  const val = e.target.value;
-                  const startDt = new Date(approveForm.approvedFrom || Date.now());
-                  const endDt = new Date(val);
-                  const hrs = Math.max(0.01, (endDt.getTime() - startDt.getTime()) / 3600000);
-                  setApproveForm({ ...approveForm, durationHours: Math.round(hrs * 100) / 100, approvedUntil: val });
-                }} />
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input className="pam-input" type="date"
+                  value={splitDateTime(approveForm.approvedUntil).date}
+                  onChange={e => {
+                    const newDate = e.target.value;
+                    const newTime = splitDateTime(approveForm.approvedUntil).time || '00:00';
+                    const val = joinDateTime(newDate, newTime);
+                    const startDt = new Date(approveForm.approvedFrom || Date.now());
+                    const endDt = new Date(val);
+                    const hrs = Math.max(0.01, (endDt.getTime() - startDt.getTime()) / 3600000);
+                    setApproveForm({ ...approveForm, durationHours: Math.round(hrs * 100) / 100, approvedUntil: val });
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <input className="pam-input" type="time"
+                  value={splitDateTime(approveForm.approvedUntil).time}
+                  onChange={e => {
+                    const newDate = splitDateTime(approveForm.approvedUntil).date || new Date().toISOString().split('T')[0];
+                    const newTime = e.target.value;
+                    const val = joinDateTime(newDate, newTime);
+                    const startDt = new Date(approveForm.approvedFrom || Date.now());
+                    const endDt = new Date(val);
+                    const hrs = Math.max(0.01, (endDt.getTime() - startDt.getTime()) / 3600000);
+                    setApproveForm({ ...approveForm, durationHours: Math.round(hrs * 100) / 100, approvedUntil: val });
+                  }}
+                  style={{ flex: 1 }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setApproveEndOffset(1)}>+1h</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setApproveEndOffset(2)}>+2h</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setApproveEndOffset(4)}>+4h</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setApproveEndOffset(8)}>+8h</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setApproveEndOffset(24)}>+24h</button>
+              </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
@@ -726,18 +900,44 @@ export default function TicketingDashboard() {
 
               <div>
                 <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600, display: 'block', marginBottom: '0.3rem' }}>Start Access From *</label>
-                <input 
-                  className="pam-input" 
-                  type="datetime-local" 
-                  value={grantForm.approvedFrom} 
-                  onChange={e => {
-                    const val = e.target.value;
-                    const newStart = new Date(val);
-                    const newEnd = new Date(newStart.getTime() + Number(grantForm.durationHours) * 3600000);
-                    setGrantForm(f => ({ ...f, approvedFrom: val, approvedUntil: toLocalFromISO(newEnd.toISOString()) }));
-                  }}
-                  required
-                />
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input 
+                    className="pam-input" 
+                    type="date" 
+                    value={splitDateTime(grantForm.approvedFrom).date} 
+                    onChange={e => {
+                      const newDate = e.target.value;
+                      const newTime = splitDateTime(grantForm.approvedFrom).time || '00:00';
+                      const val = joinDateTime(newDate, newTime);
+                      const newStart = new Date(val);
+                      const newEnd = new Date(newStart.getTime() + Number(grantForm.durationHours) * 3600000);
+                      setGrantForm(f => ({ ...f, approvedFrom: val, approvedUntil: toLocalFromISO(newEnd.toISOString()) }));
+                    }}
+                    style={{ flex: 1 }}
+                    required
+                  />
+                  <input 
+                    className="pam-input" 
+                    type="time" 
+                    value={splitDateTime(grantForm.approvedFrom).time} 
+                    onChange={e => {
+                      const newDate = splitDateTime(grantForm.approvedFrom).date || new Date().toISOString().split('T')[0];
+                      const newTime = e.target.value;
+                      const val = joinDateTime(newDate, newTime);
+                      const newStart = new Date(val);
+                      const newEnd = new Date(newStart.getTime() + Number(grantForm.durationHours) * 3600000);
+                      setGrantForm(f => ({ ...f, approvedFrom: val, approvedUntil: toLocalFromISO(newEnd.toISOString()) }));
+                    }}
+                    style={{ flex: 1 }}
+                    required
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setGrantStart(new Date())}>Now</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setGrantStart(new Date(Date.now() + 30 * 60000))}>+30m</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setGrantStart(new Date(Date.now() + 60 * 60000))}>+1h</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setGrantStart(new Date(Date.now() + 120 * 60000))}>+2h</button>
+                </div>
               </div>
 
               <div>
@@ -761,19 +961,47 @@ export default function TicketingDashboard() {
 
               <div>
                 <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600, display: 'block', marginBottom: '0.3rem' }}>Approved Until *</label>
-                <input 
-                  className="pam-input" 
-                  type="datetime-local" 
-                  value={grantForm.approvedUntil} 
-                  onChange={e => {
-                    const val = e.target.value;
-                    const startDt = new Date(grantForm.approvedFrom || Date.now());
-                    const endDt = new Date(val);
-                    const hrs = Math.max(0.01, (endDt.getTime() - startDt.getTime()) / 3600000);
-                    setGrantForm(f => ({ ...f, durationHours: Math.round(hrs * 100) / 100, approvedUntil: val }));
-                  }}
-                  required
-                />
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input 
+                    className="pam-input" 
+                    type="date" 
+                    value={splitDateTime(grantForm.approvedUntil).date} 
+                    onChange={e => {
+                      const newDate = e.target.value;
+                      const newTime = splitDateTime(grantForm.approvedUntil).time || '00:00';
+                      const val = joinDateTime(newDate, newTime);
+                      const startDt = new Date(grantForm.approvedFrom || Date.now());
+                      const endDt = new Date(val);
+                      const hrs = Math.max(0.01, (endDt.getTime() - startDt.getTime()) / 3600000);
+                      setGrantForm(f => ({ ...f, durationHours: Math.round(hrs * 100) / 100, approvedUntil: val }));
+                    }}
+                    style={{ flex: 1 }}
+                    required
+                  />
+                  <input 
+                    className="pam-input" 
+                    type="time" 
+                    value={splitDateTime(grantForm.approvedUntil).time} 
+                    onChange={e => {
+                      const newDate = splitDateTime(grantForm.approvedUntil).date || new Date().toISOString().split('T')[0];
+                      const newTime = e.target.value;
+                      const val = joinDateTime(newDate, newTime);
+                      const startDt = new Date(grantForm.approvedFrom || Date.now());
+                      const endDt = new Date(val);
+                      const hrs = Math.max(0.01, (endDt.getTime() - startDt.getTime()) / 3600000);
+                      setGrantForm(f => ({ ...f, durationHours: Math.round(hrs * 100) / 100, approvedUntil: val }));
+                    }}
+                    style={{ flex: 1 }}
+                    required
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setGrantEndOffset(1)}>+1h</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setGrantEndOffset(2)}>+2h</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setGrantEndOffset(4)}>+4h</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setGrantEndOffset(8)}>+8h</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setGrantEndOffset(24)}>+24h</button>
+                </div>
               </div>
 
               <div>
@@ -805,9 +1033,74 @@ export default function TicketingDashboard() {
               Server: <strong style={{ color: '#4facfe' }}>{editModal.hostname}</strong> | User: <strong>{editModal.requesterId}</strong>
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+              <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>New Start Date/Time</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input className="pam-input" type="date" value={splitDateTime(editForm.validFrom).date}
+                  onChange={e => {
+                    const newDate = e.target.value;
+                    const newTime = splitDateTime(editForm.validFrom).time || '00:00';
+                    const val = joinDateTime(newDate, newTime);
+                    const newStart = new Date(val);
+                    const currentStart = new Date(editForm.validFrom || Date.now());
+                    const currentEnd = new Date(editForm.validUntil || Date.now());
+                    const durationMs = Math.max(0, currentEnd.getTime() - currentStart.getTime());
+                    const newEnd = new Date(newStart.getTime() + durationMs);
+                    setEditForm(f => ({ ...f, validFrom: val, validUntil: toLocalFromISO(newEnd.toISOString()) }));
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <input className="pam-input" type="time" value={splitDateTime(editForm.validFrom).time}
+                  onChange={e => {
+                    const newDate = splitDateTime(editForm.validFrom).date || new Date().toISOString().split('T')[0];
+                    const newTime = e.target.value;
+                    const val = joinDateTime(newDate, newTime);
+                    const newStart = new Date(val);
+                    const currentStart = new Date(editForm.validFrom || Date.now());
+                    const currentEnd = new Date(editForm.validUntil || Date.now());
+                    const durationMs = Math.max(0, currentEnd.getTime() - currentStart.getTime());
+                    const newEnd = new Date(newStart.getTime() + durationMs);
+                    setEditForm(f => ({ ...f, validFrom: val, validUntil: toLocalFromISO(newEnd.toISOString()) }));
+                  }}
+                  style={{ flex: 1 }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setEditStart(new Date())}>Now</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setEditStart(new Date(Date.now() + 30 * 60000))}>+30m</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setEditStart(new Date(Date.now() + 60 * 60000))}>+1h</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setEditStart(new Date(Date.now() + 120 * 60000))}>+2h</button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
               <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>New Expiry Date/Time</label>
-              <input className="pam-input" type="datetime-local" value={editForm.validUntil}
-                onChange={e => setEditForm(f => ({ ...f, validUntil: e.target.value }))} />
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input className="pam-input" type="date" value={splitDateTime(editForm.validUntil).date}
+                  onChange={e => {
+                    const newDate = e.target.value;
+                    const newTime = splitDateTime(editForm.validUntil).time || '00:00';
+                    const val = joinDateTime(newDate, newTime);
+                    setEditForm(f => ({ ...f, validUntil: val }));
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <input className="pam-input" type="time" value={splitDateTime(editForm.validUntil).time}
+                  onChange={e => {
+                    const newDate = splitDateTime(editForm.validUntil).date || new Date().toISOString().split('T')[0];
+                    const newTime = e.target.value;
+                    const val = joinDateTime(newDate, newTime);
+                    setEditForm(f => ({ ...f, validUntil: val }));
+                  }}
+                  style={{ flex: 1 }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setEditEndOffset(1)}>+1h</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setEditEndOffset(2)}>+2h</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setEditEndOffset(4)}>+4h</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setEditEndOffset(8)}>+8h</button>
+                <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setEditEndOffset(24)}>+24h</button>
+              </div>
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>

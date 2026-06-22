@@ -99,17 +99,63 @@ function App() {
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '0 2rem',
-              background: 'rgba(10, 16, 35, 0.6)',
+              background: 'rgba(10, 16, 35, 0.65)',
               backdropFilter: 'blur(10px)',
               position: 'sticky',
               top: 0,
               zIndex: 999,
               color: '#fff'
             }}>
-              <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.45)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-                XentralACMS Portal
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.45)', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+                  XentralACMS Portal
+                </span>
+                <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.15)' }} />
+                <span style={{
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: '6px',
+                  background: 'rgba(79, 172, 254, 0.08)',
+                  border: '1px solid rgba(79, 172, 254, 0.25)',
+                  color: '#4facfe',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <span className="blue-pulse-dot" style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4facfe', display: 'inline-block' }} />
+                  ENTERPRISE NODE
+                </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: '#a8ffca', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.15)', padding: '0.25rem 0.6rem', borderRadius: '6px', fontWeight: 600, letterSpacing: '0.3px' }}>
+                  <span className="secure-pulse-dot" style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                  SECURE TUNNEL: ACTIVE
+                </div>
+
+                <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.1)' }} />
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{
+                    padding: '0.15rem 0.5rem',
+                    borderRadius: '4px',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    background: (user?.roleName === 'Super Admin' || user?.roleName === 'Admin' || user?.roleName === 'SUPER_ADMIN') ? 'rgba(255,203,66,0.15)' : 'rgba(255,255,255,0.06)',
+                    color: (user?.roleName === 'Super Admin' || user?.roleName === 'Admin' || user?.roleName === 'SUPER_ADMIN') ? '#ffcb42' : '#fff',
+                    border: `1px solid ${(user?.roleName === 'Super Admin' || user?.roleName === 'Admin' || user?.roleName === 'SUPER_ADMIN') ? 'rgba(255,203,66,0.3)' : 'rgba(255,255,255,0.15)'}`
+                  }}>
+                    {user?.roleName || 'USER'}
+                  </span>
+                  <span style={{ fontSize: '0.82rem', opacity: 0.85, fontWeight: 600 }}>
+                    {user?.firstName ? `${user.firstName} ${user.lastName?.[0] || ''}.` : user?.userId}
+                  </span>
+                </div>
+
+                <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.1)' }} />
+
                 <NotificationBell />
               </div>
             </header>

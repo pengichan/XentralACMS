@@ -39,6 +39,7 @@ export default function NotificationBell() {
           if (payload.userId === user.id || (payload.userId === 'ROLE_ADMIN' && isAdmin)) {
             // Play subtle alert sound if possible, or just refetch notifications
             fetchNotifications();
+            window.dispatchEvent(new CustomEvent('xentral_events_update', { detail: payload }));
           }
         }
       } catch (err) {

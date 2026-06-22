@@ -65,6 +65,7 @@ export default function SidebarNav() {
         const payload = JSON.parse(e.data);
         if (payload.type === 'pending_counts_update') {
           fetchCounts();
+          window.dispatchEvent(new CustomEvent('xentral_events_update', { detail: payload }));
         }
       } catch (err) {
         // Skip parsing errors for comments (e.g. : ping)

@@ -316,6 +316,86 @@ export default function ServerManagement() {
   const [ticketForm, setTicketForm] = useState({ reason: '', urgency: 'Normal', accessType: 'Remote Access', requestedStartTime: '', requestedEndTime: '' });
   const [submitting, setSubmitting] = useState(false);
 
+  // Helper: convert local datetime-local string to ISO
+  const toISOFromLocal = (dtStr) => {
+    if (!dtStr) return '';
+    const d = new Date(dtStr);
+    return isNaN(d.getTime()) ? '' : d.toISOString();
+  };
+  // Helper: convert ISO to datetime-local format
+  const toLocalFromISO = (isoStr) => {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime()) || d.getFullYear() < 2000) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const SHORTCUT_BTN_STYLE = {
+    padding: '0.25rem 0.5rem',
+    borderRadius: '4px',
+    background: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: '0.72rem',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    outline: 'none',
+    marginTop: '0.25rem',
+  };
+
+  const handleMouseEnterShortcut = (e) => {
+    e.currentTarget.style.background = 'rgba(79, 172, 254, 0.15)';
+    e.currentTarget.style.borderColor = 'rgba(79, 172, 254, 0.4)';
+    e.currentTarget.style.color = '#4facfe';
+  };
+
+  const handleMouseLeaveShortcut = (e) => {
+    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+    e.currentTarget.style.color = 'rgba(255, 255, 255, 0.7)';
+  };
+
+  const setRequestStart = (newStart) => {
+    const newStartStr = toLocalFromISO(newStart.toISOString());
+    setTicketForm(prev => {
+      const currentStart = new Date(prev.requestedStartTime || Date.now());
+      const currentEnd = new Date(prev.requestedEndTime || Date.now());
+      const durationMs = currentEnd.getTime() - currentStart.getTime();
+      const finalDuration = durationMs > 0 ? durationMs : 8 * 3600000;
+      const newEnd = new Date(newStart.getTime() + finalDuration);
+      return {
+        ...prev,
+        requestedStartTime: newStartStr,
+        requestedEndTime: toLocalFromISO(newEnd.toISOString())
+      };
+    });
+  };
+
+  const setRequestEndOffset = (hours) => {
+    setTicketForm(prev => {
+      const startDt = new Date(prev.requestedStartTime || Date.now());
+      const newEnd = new Date(startDt.getTime() + hours * 3600000);
+      return {
+        ...prev,
+        requestedEndTime: toLocalFromISO(newEnd.toISOString())
+      };
+    });
+  };
+
+  const handleOpenRequestModal = (server) => {
+    const nowLocal = toLocalFromISO(new Date().toISOString());
+    const defaultUntil = toLocalFromISO(new Date(Date.now() + 8 * 3600000).toISOString());
+    setTicketForm({
+      reason: '',
+      urgency: 'Normal',
+      accessType: 'Remote Access',
+      requestedStartTime: nowLocal,
+      requestedEndTime: defaultUntil
+    });
+    setRequestModal(server);
+  };
+
   useEffect(() => { fetchServers(); }, []);
 
   const fetchServers = async () => {
@@ -438,7 +518,7 @@ export default function ServerManagement() {
                         ) : (
                           <>
                             <button onClick={() => navigate(`/pam/servers/${s.id}`)} style={btnStyle('#ffcb42')}>View</button>
-                            <button onClick={() => setRequestModal(s)} style={btnStyle('#a8ffca')}>Request Access</button>
+                            <button onClick={() => handleOpenRequestModal(s)} style={btnStyle('#a8ffca')}>Request Access</button>
                           </>
                         )}
                       </div>
@@ -491,24 +571,91 @@ export default function ServerManagement() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>Requested Start Time *</label>
-                <input 
-                  className="pam-input" 
-                  type="datetime-local" 
-                  value={ticketForm.requestedStartTime} 
-                  onChange={e => setTicketForm(f => ({ ...f, requestedStartTime: e.target.value }))} 
-                  required 
-                />
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input 
+                    className="pam-input" 
+                    type="date" 
+                    value={splitDateTime(ticketForm.requestedStartTime).date} 
+                    onChange={e => {
+                      const newDate = e.target.value;
+                      const newTime = splitDateTime(ticketForm.requestedStartTime).time || '00:00';
+                      const val = joinDateTime(newDate, newTime);
+                      const newStart = new Date(val);
+                      const currentStart = new Date(ticketForm.requestedStartTime || Date.now());
+                      const currentEnd = new Date(ticketForm.requestedEndTime || Date.now());
+                      const durationMs = currentEnd.getTime() - currentStart.getTime();
+                      const finalDuration = durationMs > 0 ? durationMs : 8 * 3600000;
+                      const newEnd = new Date(newStart.getTime() + finalDuration);
+                      setTicketForm(f => ({ ...f, requestedStartTime: val, requestedEndTime: toLocalFromISO(newEnd.toISOString()) }));
+                    }}
+                    style={{ flex: 1 }}
+                    required 
+                  />
+                  <input 
+                    className="pam-input" 
+                    type="time" 
+                    value={splitDateTime(ticketForm.requestedStartTime).time} 
+                    onChange={e => {
+                      const newDate = splitDateTime(ticketForm.requestedStartTime).date || new Date().toISOString().split('T')[0];
+                      const newTime = e.target.value;
+                      const val = joinDateTime(newDate, newTime);
+                      const newStart = new Date(val);
+                      const currentStart = new Date(ticketForm.requestedStartTime || Date.now());
+                      const currentEnd = new Date(ticketForm.requestedEndTime || Date.now());
+                      const durationMs = currentEnd.getTime() - currentStart.getTime();
+                      const finalDuration = durationMs > 0 ? durationMs : 8 * 3600000;
+                      const newEnd = new Date(newStart.getTime() + finalDuration);
+                      setTicketForm(f => ({ ...f, requestedStartTime: val, requestedEndTime: toLocalFromISO(newEnd.toISOString()) }));
+                    }}
+                    style={{ flex: 1 }}
+                    required 
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setRequestStart(new Date())}>Now</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setRequestStart(new Date(Date.now() + 30 * 60000))}>+30m</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setRequestStart(new Date(Date.now() + 60 * 60000))}>+1h</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setRequestStart(new Date(Date.now() + 120 * 60000))}>+2h</button>
+                </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>Requested End Time *</label>
-                <input 
-                  className="pam-input" 
-                  type="datetime-local" 
-                  value={ticketForm.requestedEndTime} 
-                  onChange={e => setTicketForm(f => ({ ...f, requestedEndTime: e.target.value }))} 
-                  required 
-                />
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input 
+                    className="pam-input" 
+                    type="date" 
+                    value={splitDateTime(ticketForm.requestedEndTime).date} 
+                    onChange={e => {
+                      const newDate = e.target.value;
+                      const newTime = splitDateTime(ticketForm.requestedEndTime).time || '00:00';
+                      const val = joinDateTime(newDate, newTime);
+                      setTicketForm(f => ({ ...f, requestedEndTime: val }));
+                    }}
+                    style={{ flex: 1 }}
+                    required 
+                  />
+                  <input 
+                    className="pam-input" 
+                    type="time" 
+                    value={splitDateTime(ticketForm.requestedEndTime).time} 
+                    onChange={e => {
+                      const newDate = splitDateTime(ticketForm.requestedEndTime).date || new Date().toISOString().split('T')[0];
+                      const newTime = e.target.value;
+                      const val = joinDateTime(newDate, newTime);
+                      setTicketForm(f => ({ ...f, requestedEndTime: val }));
+                    }}
+                    style={{ flex: 1 }}
+                    required 
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setRequestEndOffset(1)}>+1h</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setRequestEndOffset(2)}>+2h</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setRequestEndOffset(4)}>+4h</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setRequestEndOffset(8)}>+8h</button>
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onMouseEnter={handleMouseEnterShortcut} onMouseLeave={handleMouseLeaveShortcut} onClick={() => setRequestEndOffset(24)}>+24h</button>
+                </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>

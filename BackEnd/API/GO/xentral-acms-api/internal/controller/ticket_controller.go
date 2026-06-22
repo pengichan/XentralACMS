@@ -457,6 +457,7 @@ func (c *TicketController) ModifyAccess(w http.ResponseWriter, r *http.Request) 
 
 	var payload struct {
 		ValidUntil           string `json:"validUntil"`
+		ValidFrom            string `json:"validFrom"`
 		ApproverID           string `json:"approverId"`
 		AssignedCredentialID string `json:"assignedCredentialId"`
 	}
@@ -478,14 +479,20 @@ func (c *TicketController) ModifyAccess(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	var validFromVal interface{} = nil
+	if payload.ValidFrom != "" {
+		validFromVal = parseValidUntil(payload.ValidFrom, 0, now)
+	}
+
 	_, err := c.db.Exec(`
 		UPDATE dbo.Ticket
 		SET validuntil = @p2, 
 		    approverid = @p3, 
 		    updateddate = @p4,
-		    assignedcredentialid = CASE WHEN @p5 IS NOT NULL THEN @p5 ELSE assignedcredentialid END
+		    assignedcredentialid = CASE WHEN @p5 IS NOT NULL THEN @p5 ELSE assignedcredentialid END,
+		    validfrom = CASE WHEN @p6 IS NOT NULL THEN @p6 ELSE validfrom END
 		WHERE id = @p1 AND status = 'Approved' AND isdeleted = 0
-	`, id, validUntil, payload.ApproverID, now, nullIfEmpty(payload.AssignedCredentialID))
+	`, id, validUntil, payload.ApproverID, now, nullIfEmpty(payload.AssignedCredentialID), validFromVal)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -501,6 +508,10 @@ func (c *TicketController) ModifyAccess(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Audit Log
+	logMsg := "Ticket access modified. Valid until: " + validUntil.Format(time.RFC3339)
+	if payload.ValidFrom != "" {
+		logMsg = "Ticket access modified. Valid from: " + payload.ValidFrom + " until: " + validUntil.Format(time.RFC3339)
+	}
 	auditLogger := NewAuditLogController(c.db)
 	auditLogger.LogEvent(
 		payload.ApproverID,
@@ -512,7 +523,7 @@ func (c *TicketController) ModifyAccess(w http.ResponseWriter, r *http.Request) 
 		r.RemoteAddr,
 		"Success",
 		"Info",
-		"Ticket access modified. Valid until: "+validUntil.Format(time.RFC3339),
+		logMsg,
 	)
 
 	w.WriteHeader(http.StatusOK)

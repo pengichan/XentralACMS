@@ -177,3 +177,35 @@
   box-shadow: 0 0 10px rgba(255, 202, 202, 0.25);
 }
 
+@keyframes securePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.secure-pulse-dot {
+  animation: securePulse 2s infinite;
+}
+
+@keyframes bluePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(79, 172, 254, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(79, 172, 254, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(79, 172, 254, 0);
+  }
+}
+
+.blue-pulse-dot {
+  animation: bluePulse 2s infinite;
+}
+
