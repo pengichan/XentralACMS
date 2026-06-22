@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const API = 'http://localhost:8080';
 
@@ -12,16 +12,6 @@ const OVERLAY_STYLE = {
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',
-};
-
-const LOADER_CONTAINER = {
-  flex: 1,
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'center',
-  alignItems: 'center',
-  background: '#030712',
-  padding: '2rem',
 };
 
 const DESKTOP_CONTAINER = {
@@ -67,9 +57,12 @@ function formatCountdown(totalSeconds) {
 export default function BrowserRdpSession({ hostname, ipAddress, username, password, token, validUntil, ticketId, serverId, userId, onClose }) {
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState([]);
+  const [failed, setFailed] = useState(false);
+  const [failReason, setFailReason] = useState('');
   const [remaining, setRemaining] = useState(null);
   const [currentValidUntil, setCurrentValidUntil] = useState(validUntil);
   const closedRef = useRef(false);
+  const connectTimeoutRef = useRef(null);
 
   const baseLogs = [
     `[INFO] Initializing secure RDP tunnel to gateway...`,
@@ -89,7 +82,7 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
     else return;
     try {
       navigator.sendBeacon(`${API}/api/remote/sessions/close`, JSON.stringify(body));
-    } catch {
+    } catch (e) {
       fetch(`${API}/api/remote/sessions/close`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -100,6 +93,9 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
   };
 
   const handleDisconnect = () => {
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+    }
     closeSessionOnServer();
     onClose();
   };
@@ -127,9 +123,9 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
   const startConnection = () => {
     setLoading(true);
     setLogs([]);
+    setFailed(false);
+    setFailReason('');
     let index = 0;
-    let timeoutId1 = null;
-    let timeoutId2 = null;
 
     const interval = setInterval(() => {
       if (index < baseLogs.length) {
@@ -138,26 +134,103 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
         index++;
       } else {
         clearInterval(interval);
-        timeoutId1 = setTimeout(() => {
-          setLogs((prev) => [
-            ...prev,
-            `[INFO] Secure RDP viewport loaded. Initiating remote connection...`
-          ]);
-          timeoutId2 = setTimeout(() => setLoading(false), 500);
-        }, 300);
       }
-    }, 350);
+    }, 250);
 
     return () => {
       clearInterval(interval);
-      if (timeoutId1) clearTimeout(timeoutId1);
-      if (timeoutId2) clearTimeout(timeoutId2);
     };
   };
 
   useEffect(() => {
     const cancel = startConnection();
-    return cancel;
+    return () => {
+      cancel();
+      if (connectTimeoutRef.current) {
+        clearTimeout(connectTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Listen to postMessage events from index.html (iframe)
+  useEffect(() => {
+    const handleMessage = (e) => {
+      if (!e.data || !e.data.type) return;
+
+      if (e.data.type === 'rdp-connect') {
+        setLogs((prev) => [...prev, '[INFO] Handshake complete. Verifying credentials and rendering session...']);
+        
+        // Start a fallback timer just in case no bitmap event is received (e.g. static black screen)
+        if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
+        connectTimeoutRef.current = setTimeout(() => {
+          setLogs((prev) => {
+            if (!prev.some(l => l.includes('Desktop session active'))) {
+              return [...prev, '[SUCCESS] Session connected. Showing viewport.'];
+            }
+            return prev;
+          });
+          setLoading(false);
+        }, 3000);
+
+      } else if (e.data.type === 'rdp-bitmap') {
+        if (connectTimeoutRef.current) {
+          clearTimeout(connectTimeoutRef.current);
+          connectTimeoutRef.current = null;
+        }
+        setLogs((prev) => {
+          if (!prev.some(l => l.includes('Desktop session active'))) {
+            return [...prev, '[SUCCESS] Desktop session active. Rendering viewport...'];
+          }
+          return prev;
+        });
+        setTimeout(() => setLoading(false), 200);
+
+      } else if (e.data.type === 'rdp-error') {
+        if (connectTimeoutRef.current) {
+          clearTimeout(connectTimeoutRef.current);
+          connectTimeoutRef.current = null;
+        }
+        setFailed(true);
+        const rawMsg = e.data.message || 'Connection error';
+        let translated = rawMsg;
+        const errMsg = String(rawMsg).toLowerCase();
+        if (errMsg.indexOf('econnrefused') !== -1 || errMsg.indexOf('etimedout') !== -1 || errMsg.indexOf('timeout') !== -1) {
+          translated = "Target server is offline or unreachable. Verify the host is online and Remote Desktop is enabled.";
+        } else if (errMsg.indexOf('logon') !== -1 || errMsg.indexOf('access denied') !== -1 || errMsg.indexOf('authentication') !== -1 || errMsg.indexOf('credentials') !== -1 || errMsg.indexOf('security') !== -1) {
+          translated = "Authentication failed (Access Denied). Verify that credentials are correct and authorized for RDP.";
+        }
+        setFailReason(translated);
+        setLogs((prev) => {
+          if (prev.some(l => l.includes('[FAILURE]'))) return prev;
+          return [...prev, `[FAILURE] ${translated}`];
+        });
+        setLoading(true);
+
+      } else if (e.data.type === 'rdp-close') {
+        if (connectTimeoutRef.current) {
+          clearTimeout(connectTimeoutRef.current);
+          connectTimeoutRef.current = null;
+        }
+        setLogs((prev) => {
+          if (!prev.includes('[INFO] Remote connection closed.')) {
+            return [...prev, '[INFO] Remote connection closed.'];
+          }
+          return prev;
+        });
+        setLogs((prev) => {
+          if (!prev.some(l => l.includes('[FAILURE]'))) {
+            setFailed(true);
+            setFailReason("Session disconnected. The remote connection has been terminated.");
+            setLoading(true);
+            return [...prev, '[FAILURE] Session disconnected. The remote connection has been terminated.'];
+          }
+          return prev;
+        });
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
   }, []);
 
   // Countdown timer
@@ -188,7 +261,6 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
         if (res.ok) {
           const data = await res.json();
           if (data.status !== 'Approved') {
-            // Access was revoked by admin
             handleDisconnect();
           } else if (data.validUntil) {
             setCurrentValidUntil(data.validUntil);
@@ -208,25 +280,86 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
     return () => { closeSessionOnServer(); };
   }, []);
 
-  // We use the memoized RdpViewport component defined below to completely isolate
-  // the iframe from parent component updates (such as the 1-second countdown ticks).
-
   const countdownColor = remaining !== null && remaining <= 300 ? '#ef4444' : remaining !== null && remaining <= 900 ? '#ffcb42' : '#a8ffca';
 
   return (
     <div style={OVERLAY_STYLE}>
-      {loading ? (
-        <div style={LOADER_CONTAINER}>
+      {/* Desktop Container is always rendered in background so RDP iframe connects immediately */}
+      <div style={DESKTOP_CONTAINER}>
+        {/* Top Info Bar */}
+        <div style={TOP_BAR}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.1rem' }}>🖥️</span>
+            <strong>XentralACMS Secure HTML5 Remote Client</strong>
+            <span style={{ opacity: 0.3 }}>|</span>
+            <span style={{ color: '#ffcb42', fontWeight: 600 }}>{hostname}</span>
+            <span style={{ opacity: 0.6 }}>({ipAddress})</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            {/* Countdown Timer */}
+            {remaining !== null ? (
+              <span style={{ fontFamily: 'Consolas, monospace', fontWeight: 700, color: countdownColor, fontSize: '0.82rem', letterSpacing: '1px' }}>
+                ⏱ {formatCountdown(remaining)}
+              </span>
+            ) : (
+              <span style={{ opacity: 0.5, fontSize: '0.78rem' }}>⚡ Unlimited</span>
+            )}
+            <span style={{ opacity: 0.3 }}>|</span>
+            <span style={{ opacity: 0.7 }}>SSO Tunnel: <strong style={{ color: '#a8ffca' }}>{username}</strong></span>
+            <button 
+              onClick={handleOpenExternal} 
+              style={{ 
+                background: 'rgba(255,255,255,0.08)', 
+                border: '1px solid rgba(255,255,255,0.15)', 
+                color: '#fff', 
+                padding: '0.3rem 0.8rem', 
+                borderRadius: '4px', 
+                cursor: 'pointer', 
+                fontSize: '0.72rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              🌐 Open in External Tab
+            </button>
+            <button style={DISCONNECT_BTN} onClick={handleDisconnect}>✕ Disconnect</button>
+          </div>
+        </div>
+
+        {/* Desktop Body */}
+        <RdpViewport token={token} />
+      </div>
+
+      {/* Loading & Failure Overlay */}
+      {loading && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 100000,
+          background: '#030712',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '2rem'
+        }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', width: '550px', maxWidth: '95vw' }}>
-            <div className="standard-loading-spinner" style={{ width: '40px', height: '40px', border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#ffcb42', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-            <h3 style={{ margin: 0, color: '#ffcb42', letterSpacing: '1px', textTransform: 'uppercase' }}>
-              ESTABLISHING RDP GATEWAY CONNECTION
+            {failed ? (
+              <div style={{ fontSize: '2.5rem' }}>❌</div>
+            ) : (
+              <div className="standard-loading-spinner" style={{ width: '40px', height: '40px', border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#ffcb42', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            )}
+            
+            <h3 style={{ margin: 0, color: failed ? '#ef4444' : '#ffcb42', letterSpacing: '1px', textTransform: 'uppercase' }}>
+              {failed ? 'RDP CONNECTION FAILED' : 'ESTABLISHING RDP GATEWAY CONNECTION'}
             </h3>
             
             <div style={{
               width: '100%',
               background: '#020617',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: failed ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(255,255,255,0.08)',
               borderRadius: '8px',
               padding: '1.2rem',
               fontFamily: 'Consolas, monospace',
@@ -240,59 +373,33 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
               {logs.map((log, idx) => {
                 let logColor = '#10b981';
                 if (log && log.startsWith('[SUCCESS]')) logColor = '#a8ffca';
+                if (log && log.startsWith('[FAILURE]')) logColor = '#f87171';
                 return (
                   <div key={idx} style={{ color: logColor }}>{log || ''}</div>
                 );
               })}
             </div>
-          </div>
-        </div>
-      ) : (
-        <div style={DESKTOP_CONTAINER}>
-          {/* Top Info Bar */}
-          <div style={TOP_BAR}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '1.1rem' }}>🖥️</span>
-              <strong>XentralACMS Secure HTML5 Remote Client</strong>
-              <span style={{ opacity: 0.3 }}>|</span>
-              <span style={{ color: '#ffcb42', fontWeight: 600 }}>{hostname}</span>
-              <span style={{ opacity: 0.6 }}>({ipAddress})</span>
-            </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-              {/* Countdown Timer */}
-              {remaining !== null ? (
-                <span style={{ fontFamily: 'Consolas, monospace', fontWeight: 700, color: countdownColor, fontSize: '0.82rem', letterSpacing: '1px' }}>
-                  ⏱ {formatCountdown(remaining)}
-                </span>
-              ) : (
-                <span style={{ opacity: 0.5, fontSize: '0.78rem' }}>⚡ Unlimited</span>
-              )}
-              <span style={{ opacity: 0.3 }}>|</span>
-              <span style={{ opacity: 0.7 }}>SSO Tunnel: <strong style={{ color: '#a8ffca' }}>{username}</strong></span>
+            {failed && (
               <button 
-                onClick={handleOpenExternal} 
-                style={{ 
-                  background: 'rgba(255,255,255,0.08)', 
-                  border: '1px solid rgba(255,255,255,0.15)', 
-                  color: '#fff', 
-                  padding: '0.3rem 0.8rem', 
-                  borderRadius: '4px', 
-                  cursor: 'pointer', 
-                  fontSize: '0.72rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
+                onClick={handleDisconnect} 
+                style={{
+                  background: '#ef4444',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '0.6rem 2.2rem',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '0.85rem',
+                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.45)',
+                  transition: 'background 0.2s',
                 }}
               >
-                🌐 Open in External Tab
+                Close Viewport
               </button>
-              <button style={DISCONNECT_BTN} onClick={handleDisconnect}>✕ Disconnect</button>
-            </div>
+            )}
           </div>
-
-          {/* Desktop Body */}
-          <RdpViewport token={token} />
         </div>
       )}
     </div>
@@ -312,4 +419,3 @@ const RdpViewport = React.memo(({ token }) => {
     </div>
   );
 });
-
