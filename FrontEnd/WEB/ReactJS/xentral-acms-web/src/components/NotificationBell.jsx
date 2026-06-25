@@ -129,7 +129,7 @@ export default function NotificationBell() {
       });
 
       if (res.ok) {
-        alert(`Access ticket successfully ${action}d!`);
+        alert(`Access ticket successfully ${action === 'deny' ? 'denied' : 'approved'}!`);
         fetchNotifications();
       } else {
         const text = await res.text();
