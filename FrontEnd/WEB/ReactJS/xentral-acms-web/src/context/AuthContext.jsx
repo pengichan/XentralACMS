@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 const AuthContext = createContext(null);
 
@@ -18,6 +18,30 @@ export function AuthProvider({ children }) {
       return null;
     }
   });
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const eventSource = new EventSource('http://localhost:8080/api/system/events');
+
+    eventSource.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        window.dispatchEvent(new CustomEvent('xentral_events_update', { detail: payload }));
+      } catch (err) {
+        // Skip comment lines / pings
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('SSE connection error:', err);
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [user?.id]);
+
 
   const login = useCallback((userData) => {
     sessionStorage.setItem('xentral_user', JSON.stringify(userData));

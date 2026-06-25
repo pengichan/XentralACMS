@@ -58,22 +58,17 @@ export default function SidebarNav() {
 
   React.useEffect(() => {
     if (!user?.id) return;
-    const eventSource = new EventSource('http://localhost:8080/api/system/events');
 
-    eventSource.onmessage = (e) => {
-      try {
-        const payload = JSON.parse(e.data);
-        if (payload.type === 'pending_counts_update') {
-          fetchCounts();
-          window.dispatchEvent(new CustomEvent('xentral_events_update', { detail: payload }));
-        }
-      } catch (err) {
-        // Skip parsing errors for comments (e.g. : ping)
+    const handleEventUpdate = (e) => {
+      const payload = e.detail;
+      if (payload && payload.type === 'pending_counts_update') {
+        fetchCounts();
       }
     };
 
+    window.addEventListener('xentral_events_update', handleEventUpdate);
     return () => {
-      eventSource.close();
+      window.removeEventListener('xentral_events_update', handleEventUpdate);
     };
   }, [user?.id, fetchCounts]);
 
@@ -86,7 +81,6 @@ export default function SidebarNav() {
     { name: 'Audit Logs',      path: '/pam/audit-logs',   icon: '📜' },
     { name: 'Reports',         path: '/pam/reports',      icon: '📊' },
     { name: 'User Management', path: '/pam/users',        icon: '👥' },
-    { name: 'Shared File Box', path: '/pam/files',        icon: '📤' },
     { name: 'Settings',        path: '/pam/settings',     icon: '⚙️' },
   ];
 
@@ -96,7 +90,6 @@ export default function SidebarNav() {
     { name: 'Assigned Servers', path: '/pam/assigned-servers', icon: '🔑' },
     { name: 'My Requests',     path: '/pam/tickets',         icon: '🎫' },
     { name: 'My Access History', path: '/pam/access-history', icon: '📜' },
-    { name: 'Shared File Box', path: '/pam/files',           icon: '📤' },
     { name: 'Settings',        path: '/pam/settings',        icon: '⚙️' },
   ];
 

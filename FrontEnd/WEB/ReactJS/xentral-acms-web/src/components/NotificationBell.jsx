@@ -27,26 +27,23 @@ export default function NotificationBell() {
   useEffect(() => {
     fetchNotifications();
 
-    // SSE Connection to listen for live alerts
     if (!user?.id) return;
-    const eventSource = new EventSource('http://localhost:8080/api/system/events');
 
-    eventSource.onmessage = (e) => {
-      try {
-        const payload = JSON.parse(e.data);
-        if (payload.type === 'new_notification') {
-          // If message is for this user OR role ADMIN for Admins
-          if (payload.userId === user.id || (payload.userId === 'ROLE_ADMIN' && isAdmin)) {
-            fetchNotifications();
-            window.dispatchEvent(new CustomEvent('xentral_events_update', { detail: payload }));
-          }
-        } else if (payload.type === 'pending_counts_update') {
+    const handleEventUpdate = (e) => {
+      const payload = e.detail;
+      if (!payload) return;
+
+      if (payload.type === 'new_notification') {
+        // If message is for this user OR role ADMIN for Admins
+        if (payload.userId === user.id || (payload.userId === 'ROLE_ADMIN' && isAdmin)) {
           fetchNotifications();
         }
-      } catch (err) {
-        // Ping
+      } else if (payload.type === 'pending_counts_update') {
+        fetchNotifications();
       }
     };
+
+    window.addEventListener('xentral_events_update', handleEventUpdate);
 
     // Close dropdown on click outside
     const handleClickOutside = (event) => {
@@ -58,7 +55,7 @@ export default function NotificationBell() {
     document.addEventListener('mousedown', handleClickOutside);
 
     return () => {
-      eventSource.close();
+      window.removeEventListener('xentral_events_update', handleEventUpdate);
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [user?.id, isAdmin]);
@@ -77,6 +74,25 @@ export default function NotificationBell() {
       }
     } catch (err) {
       console.error('Error marking notification as read', err);
+    }
+  };
+
+  const handleClearAll = async (e) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm('Are you sure you want to clear all notifications?')) return;
+
+    try {
+      const res = await fetch(`http://localhost:8080/api/notifications?userId=${user.id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setNotifications([]);
+        setUnreadCount(0);
+      } else {
+        alert('Failed to clear notifications');
+      }
+    } catch (err) {
+      console.error('Error clearing notifications', err);
     }
   };
 
@@ -202,11 +218,40 @@ export default function NotificationBell() {
             <h4 style={{ margin: 0, color: '#fff', fontSize: '0.9rem', fontWeight: 600 }}>
               Notifications
             </h4>
-            {unreadCount > 0 && (
-              <span style={{ fontSize: '0.75rem', color: '#ffcb42', fontWeight: 500 }}>
-                {unreadCount} unread
-              </span>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {unreadCount > 0 && (
+                <span style={{ fontSize: '0.75rem', color: '#ffcb42', fontWeight: 500 }}>
+                  {unreadCount} unread
+                </span>
+              )}
+              {notifications.length > 0 && (
+                <button
+                  onClick={handleClearAll}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ffcaca',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                    opacity: 0.8,
+                    fontWeight: 500,
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 60, 60, 0.15)';
+                    e.currentTarget.style.opacity = '1';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.opacity = '0.8';
+                  }}
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
           </div>
 
           {/* List */}

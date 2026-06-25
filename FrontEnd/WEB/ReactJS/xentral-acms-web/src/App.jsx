@@ -19,7 +19,6 @@ import Settings from './pages/pam/Settings'
 import ServerDetails from './pages/pam/ServerDetails'
 import OnboardingSetupModal from './components/onboarding-setup/OnboardingSetupModal'
 import RequestSupportPage from './pages/support/RequestSupportPage'
-import FileBox from './pages/pam/FileBox'
 import ForceChangePasswordModal from './components/ForceChangePasswordModal'
 import NotificationBell from './components/NotificationBell'
 
@@ -162,7 +161,6 @@ function App() {
           <Route path="/pam/assigned-servers" element={<AssignedServers />} />
            <Route path="/pam/access-history" element={<MyAccessHistory />} />
           <Route path="/pam/settings" element={<Settings />} />
-          <Route path="/pam/files" element={<FileBox />} />
           </Routes>
           </div>
         </div>

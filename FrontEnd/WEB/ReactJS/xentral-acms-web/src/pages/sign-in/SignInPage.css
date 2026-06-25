@@ -124,6 +124,10 @@
   width: min(760px, 100%);
 }
 
+.auth-liquid--recovery {
+  width: min(450px, 100%);
+}
+
 .auth-liquid--signup {
   width: min(760px, 100%);
 }
@@ -144,25 +148,6 @@
 
 .auth-liquid .glass > div {
   width: 100% !important;
-}
-
-.auth-liquid .auth-card::before,
-.auth-liquid .auth-card::after {
-  display: none;
-}
-
-.auth-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    120deg,
-    var(--auth-card-highlight-1) 0%,
-    var(--auth-card-highlight-2) 35%,
-    var(--auth-card-highlight-3) 75%
-  );
-  pointer-events: none;
 }
 
 .auth-card::after {
@@ -389,4 +374,23 @@
   font-size: 13px;
   text-align: right;
   opacity: 0.85;
+}
+
+.wizard-steps-indicator {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.auth-card form, .auth-card > div {
+  animation: authCardStepFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes authCardStepFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

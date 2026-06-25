@@ -227,7 +227,7 @@ func (c *RemoteController) GetRemoteAccessDetails(w http.ResponseWriter, r *http
 	)
 
 	// 6. Generate .rdp file content
-	rdpContent := fmt.Sprintf("full address:s:%s\nusername:s:%s\n", ipAddress, username)
+	rdpContent := fmt.Sprintf("full address:s:%s\nusername:s:%s\nredirectclipboard:i:1\n", ipAddress, username)
 
 	var validUntilStr string
 	if validUntil.Valid {

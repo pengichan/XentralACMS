@@ -7,13 +7,14 @@ import StandardModal from '../../components/standard-modal/StandardModal'
 import './SignInPage.css'
 
 function SignInPage() {
-  const [view, setView] = useState('login') // 'login', 'recover'
+  const [view, setView] = useState('login') // 'login', 'recover_userid', 'recover_password'
   const [formData, setFormData] = useState({
     userId: '',
     password: ''
   })
   
-  // Account Recovery states (No-Email passwordless check)
+  // Account Recovery states
+  const [recoverUserId, setRecoverUserId] = useState('')
   const [recoverFirstName, setRecoverFirstName] = useState('')
   const [recoverLastName, setRecoverLastName] = useState('')
   const [recoverEmail, setRecoverEmail] = useState('')
@@ -21,6 +22,8 @@ function SignInPage() {
   const [recoverConfirmPassword, setRecoverConfirmPassword] = useState('')
   const [resetSuccessMsg, setResetSuccessMsg] = useState('')
   const [loading, setLoading] = useState(false)
+  const [recoveryStep, setRecoveryStep] = useState(1)
+  const [recoveredUserId, setRecoveredUserId] = useState('')
 
   const [errorMessage, setErrorMessage] = useState('')
   const [setupCompleted, setSetupCompleted] = useState(false)
@@ -81,19 +84,14 @@ function SignInPage() {
     }
   }
 
-  const handleRecoverAccount = async (e) => {
+  const handleRecoverUserID = async (e) => {
     e.preventDefault()
     if (!recoverFirstName.trim() || !recoverLastName.trim() || !recoverEmail.trim()) {
       setErrorMessage('First name, last name, and email are required.')
       return
     }
-    if (recoverNewPassword && recoverNewPassword !== recoverConfirmPassword) {
-      setErrorMessage('Passwords do not match.')
-      return
-    }
     setLoading(true)
     setErrorMessage('')
-    setResetSuccessMsg('')
     try {
       const res = await fetch('http://localhost:8080/api/auth/recover-account', {
         method: 'POST',
@@ -102,22 +100,90 @@ function SignInPage() {
           firstName: recoverFirstName.trim(),
           lastName: recoverLastName.trim(),
           email: recoverEmail.trim(),
-          newPassword: recoverNewPassword.trim()
+          newPassword: ''
         })
       })
       if (res.ok) {
         const data = await res.json()
-        if (data.passwordReset) {
-          setResetSuccessMsg(`Recovery successful! Your Username/UserID is "${data.userId}" and your password has been updated.`)
-        } else {
-          setResetSuccessMsg(`Recovery successful! Your Username/UserID is "${data.userId}".`)
-        }
+        setRecoveredUserId(data.userId)
+        setRecoveryStep(2)
       } else {
         const txt = await res.text()
         setErrorMessage(txt || 'No active account matches the details provided.')
       }
     } catch (err) {
       setErrorMessage('Failed to connect to recovery service.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleVerifyPasswordResetIdentity = async (e) => {
+    e.preventDefault()
+    if (!recoverUserId.trim() || !recoverFirstName.trim() || !recoverLastName.trim() || !recoverEmail.trim()) {
+      setErrorMessage('UserID, First name, last name, and email are required.')
+      return
+    }
+    setLoading(true)
+    setErrorMessage('')
+    try {
+      const res = await fetch('http://localhost:8080/api/auth/recover-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: recoverUserId.trim(),
+          firstName: recoverFirstName.trim(),
+          lastName: recoverLastName.trim(),
+          email: recoverEmail.trim(),
+          newPassword: ''
+        })
+      })
+      if (res.ok) {
+        setRecoveryStep(2)
+      } else {
+        const txt = await res.text()
+        setErrorMessage(txt || 'No active account matches the details provided.')
+      }
+    } catch (err) {
+      setErrorMessage('Failed to connect to recovery service.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePasswordResetSubmit = async (e) => {
+    e.preventDefault()
+    if (!recoverNewPassword.trim() || !recoverConfirmPassword.trim()) {
+      setErrorMessage('Password fields are required.')
+      return
+    }
+    if (recoverNewPassword !== recoverConfirmPassword) {
+      setErrorMessage('Passwords do not match.')
+      return
+    }
+    setLoading(true)
+    setErrorMessage('')
+    try {
+      const res = await fetch('http://localhost:8080/api/auth/recover-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: recoverUserId.trim(),
+          firstName: recoverFirstName.trim(),
+          lastName: recoverLastName.trim(),
+          email: recoverEmail.trim(),
+          newPassword: recoverNewPassword.trim()
+        })
+      })
+      if (res.ok) {
+        setResetSuccessMsg(`Your password has been successfully reset! You can now log in with your UserID using your new password.`)
+        setRecoveryStep(3)
+      } else {
+        const txt = await res.text()
+        setErrorMessage(txt || 'Failed to reset password.')
+      }
+    } catch (err) {
+      setErrorMessage('Failed to connect to reset service.')
     } finally {
       setLoading(false)
     }
@@ -130,7 +196,8 @@ function SignInPage() {
       <span className="auth-orb auth-orb--three" />
 
       <LiquidGlass
-        className="auth-liquid auth-liquid--signin"
+        key={view}
+        className={`auth-liquid ${view === 'login' ? 'auth-liquid--signin' : 'auth-liquid--recovery'}`}
         padding="0"
         cornerRadius={22}
         displacementScale={66}
@@ -172,85 +239,215 @@ function SignInPage() {
             <button type="submit" className="btn btn-primary">Sign In</button>
 
             {setupCompleted && (
-              <div className="links links-split">
-                <a className="link" href="#" onClick={(e) => { e.preventDefault(); setView('recover'); setErrorMessage(''); setResetSuccessMsg(''); setRecoverFirstName(''); setRecoverLastName(''); setRecoverEmail(''); setRecoverNewPassword(''); setRecoverConfirmPassword(''); }}>
-                  Forgot Username/Password?
-                </a>
-                <Link className="link" to="/request-support?type=signup">Need an account? Request access</Link>
+              <div className="links links-split" style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-start', width: '100%' }}>
+                <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between' }}>
+                  <a className="link" href="#" onClick={(e) => { e.preventDefault(); setView('recover_userid'); setRecoveryStep(1); setRecoveredUserId(''); setErrorMessage(''); setResetSuccessMsg(''); setRecoverFirstName(''); setRecoverLastName(''); setRecoverEmail(''); }}>
+                    Forgot UserID?
+                  </a>
+                  <a className="link" href="#" onClick={(e) => { e.preventDefault(); setView('recover_password'); setRecoveryStep(1); setRecoverUserId(''); setErrorMessage(''); setResetSuccessMsg(''); setRecoverFirstName(''); setRecoverLastName(''); setRecoverEmail(''); setRecoverNewPassword(''); setRecoverConfirmPassword(''); }}>
+                    Forgot Password?
+                  </a>
+                </div>
+                <Link className="link" to="/request-support?type=signup" style={{ marginTop: '4px' }}>Need an account? Request access</Link>
               </div>
             )}
           </form>
         )}
 
-        {view === 'recover' && (
-          <form className="auth-card auth-card--signin" onSubmit={handleRecoverAccount} style={{ maxWidth: '400px', width: '90vw' }}>
+        {view === 'recover_userid' && (
+          <div className="auth-card auth-card--signin">
             <div className="auth-header brand-stack">
-              <h2>Account Recovery</h2>
+              <h2>Recover UserID</h2>
               <p style={{ fontSize: '0.8rem', opacity: 0.7, textAlign: 'center', marginTop: '0.2rem' }}>
-                Verify your profile details to recover your UserID or reset your password.
+                {recoveryStep === 1 ? "Confirm your profile details to retrieve your UserID." : "UserID successfully recovered!"}
               </p>
             </div>
 
-            {resetSuccessMsg && (
-              <div style={{ color: '#a8ffca', fontSize: '0.82rem', background: 'rgba(0,255,0,0.06)', border: '1px solid rgba(0,255,0,0.15)', padding: '0.8rem', borderRadius: '6px', textAlign: 'center', marginBottom: '1rem', lineHeight: 1.4 }}>
-                ✓ {resetSuccessMsg}
+            {recoveryStep === 1 ? (
+              <form onSubmit={handleRecoverUserID} style={{ display: 'grid', gap: '14px', width: '100%' }}>
+                <div className="field">
+                  <label htmlFor="recoverFirstName">First Name</label>
+                  <input
+                    id="recoverFirstName"
+                    type="text"
+                    placeholder="Enter your first name"
+                    value={recoverFirstName}
+                    onChange={(e) => setRecoverFirstName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="field">
+                  <label htmlFor="recoverLastName">Last Name</label>
+                  <input
+                    id="recoverLastName"
+                    type="text"
+                    placeholder="Enter your last name"
+                    value={recoverLastName}
+                    onChange={(e) => setRecoverLastName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="field">
+                  <label htmlFor="recoverEmail">Email Address</label>
+                  <input
+                    id="recoverEmail"
+                    type="email"
+                    placeholder="Enter your registered email"
+                    value={recoverEmail}
+                    onChange={(e) => setRecoverEmail(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? 'Retrieving UserID...' : 'Retrieve UserID →'}
+                </button>
+              </form>
+            ) : (
+              <div style={{ display: 'grid', gap: '14px', width: '100%', textAlign: 'center' }}>
+                <div style={{ background: 'rgba(79, 172, 254, 0.08)', border: '1px solid rgba(79, 172, 254, 0.2)', padding: '1.2rem', borderRadius: '10px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Your Username / UserID</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#4facfe', margin: '0.5rem 0', fontFamily: 'monospace', letterSpacing: '0.5px' }}>{recoveredUserId}</div>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      navigator.clipboard.writeText(recoveredUserId);
+                      alert('UserID copied to clipboard!');
+                    }} 
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: '0.75rem', padding: '0.3rem 0.8rem', borderRadius: '6px', cursor: 'pointer' }}
+                  >
+                    📋 Copy UserID
+                  </button>
+                </div>
+                <button type="button" className="btn btn-primary" onClick={() => { setView('login'); setFormData({ ...formData, userId: recoveredUserId }); }}>
+                  Sign In Now
+                </button>
               </div>
             )}
 
-            <div className="field">
-              <label htmlFor="recoverFirstName">First Name</label>
-              <input
-                id="recoverFirstName"
-                type="text"
-                placeholder="Enter your first name"
-                value={recoverFirstName}
-                onChange={(e) => setRecoverFirstName(e.target.value)}
-                required
-                disabled={Boolean(resetSuccessMsg)}
-              />
+            <div className="links" style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+              <a className="link" href="#" onClick={(e) => { e.preventDefault(); setView('login'); setErrorMessage(''); }}>
+                ← Back to Sign In
+              </a>
+            </div>
+          </div>
+        )}
+
+        {view === 'recover_password' && (
+          <div className="auth-card auth-card--signin">
+            <div className="auth-header brand-stack">
+              <h2>Reset Password</h2>
+              <div className="wizard-steps-indicator" style={{ display: 'flex', gap: '8px', margin: '0.8rem 0' }}>
+                <span style={{
+                  padding: '4px 10px',
+                  borderRadius: '20px',
+                  fontSize: '0.72rem',
+                  fontWeight: 'bold',
+                  background: recoveryStep >= 1 ? 'rgba(79, 172, 254, 0.2)' : 'rgba(255,255,255,0.05)',
+                  color: recoveryStep >= 1 ? '#4facfe' : 'rgba(255,255,255,0.4)',
+                  border: '1px solid ' + (recoveryStep >= 1 ? '#4facfe' : 'rgba(255,255,255,0.1)')
+                }}>
+                  1. Verify
+                </span>
+                <span style={{
+                  padding: '4px 10px',
+                  borderRadius: '20px',
+                  fontSize: '0.72rem',
+                  fontWeight: 'bold',
+                  background: recoveryStep >= 2 ? 'rgba(255, 203, 66, 0.2)' : 'rgba(255,255,255,0.05)',
+                  color: recoveryStep >= 2 ? '#ffcb42' : 'rgba(255,255,255,0.4)',
+                  border: '1px solid ' + (recoveryStep >= 2 ? '#ffcb42' : 'rgba(255,255,255,0.1)')
+                }}>
+                  2. Reset
+                </span>
+                <span style={{
+                  padding: '4px 10px',
+                  borderRadius: '20px',
+                  fontSize: '0.72rem',
+                  fontWeight: 'bold',
+                  background: recoveryStep >= 3 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
+                  color: recoveryStep >= 3 ? '#10b981' : 'rgba(255,255,255,0.4)',
+                  border: '1px solid ' + (recoveryStep >= 3 ? '#10b981' : 'rgba(255,255,255,0.1)')
+                }}>
+                  3. Success
+                </span>
+              </div>
+              <p style={{ fontSize: '0.8rem', opacity: 0.7, textAlign: 'center', marginTop: '0.2rem' }}>
+                {recoveryStep === 1 && "Confirm your account details to start password reset."}
+                {recoveryStep === 2 && "Identity confirmed! Enter your new password below."}
+                {recoveryStep === 3 && "Password has been successfully changed."}
+              </p>
             </div>
 
-            <div className="field">
-              <label htmlFor="recoverLastName">Last Name</label>
-              <input
-                id="recoverLastName"
-                type="text"
-                placeholder="Enter your last name"
-                value={recoverLastName}
-                onChange={(e) => setRecoverLastName(e.target.value)}
-                required
-                disabled={Boolean(resetSuccessMsg)}
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="recoverEmail">Email Address</label>
-              <input
-                id="recoverEmail"
-                type="email"
-                placeholder="Enter your registered email"
-                value={recoverEmail}
-                onChange={(e) => setRecoverEmail(e.target.value)}
-                required
-                disabled={Boolean(resetSuccessMsg)}
-              />
-            </div>
-
-            {!resetSuccessMsg && (
-              <>
-                <div style={{ margin: '1rem 0 0.5rem 0', height: '1px', background: 'rgba(255,255,255,0.08)' }} />
-                <p style={{ fontSize: '0.75rem', color: '#ffcb42', opacity: 0.8, marginBottom: '0.5rem' }}>
-                  🔒 Optional: Enter a new password to reset it.
-                </p>
+            {recoveryStep === 1 && (
+              <form onSubmit={handleVerifyPasswordResetIdentity} style={{ display: 'grid', gap: '14px', width: '100%' }}>
+                <div className="field">
+                  <label htmlFor="recoverUserId">UserID</label>
+                  <input
+                    id="recoverUserId"
+                    type="text"
+                    placeholder="Enter your UserID"
+                    value={recoverUserId}
+                    onChange={(e) => setRecoverUserId(e.target.value)}
+                    required
+                  />
+                </div>
 
                 <div className="field">
-                  <label htmlFor="recoverNewPassword">New Password (Optional)</label>
+                  <label htmlFor="recoverFirstName">First Name</label>
+                  <input
+                    id="recoverFirstName"
+                    type="text"
+                    placeholder="Enter your first name"
+                    value={recoverFirstName}
+                    onChange={(e) => setRecoverFirstName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="field">
+                  <label htmlFor="recoverLastName">Last Name</label>
+                  <input
+                    id="recoverLastName"
+                    type="text"
+                    placeholder="Enter your last name"
+                    value={recoverLastName}
+                    onChange={(e) => setRecoverLastName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="field">
+                  <label htmlFor="recoverEmail">Email Address</label>
+                  <input
+                    id="recoverEmail"
+                    type="email"
+                    placeholder="Enter your registered email"
+                    value={recoverEmail}
+                    onChange={(e) => setRecoverEmail(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? 'Verifying Details...' : 'Verify Details →'}
+                </button>
+              </form>
+            )}
+
+            {recoveryStep === 2 && (
+              <form onSubmit={handlePasswordResetSubmit} style={{ display: 'grid', gap: '14px', width: '100%' }}>
+                <div className="field">
+                  <label htmlFor="recoverNewPassword">New Password</label>
                   <input
                     id="recoverNewPassword"
                     type="password"
                     placeholder="Enter new password"
                     value={recoverNewPassword}
                     onChange={(e) => setRecoverNewPassword(e.target.value)}
+                    required
                   />
                 </div>
 
@@ -262,27 +459,34 @@ function SignInPage() {
                     placeholder="Confirm new password"
                     value={recoverConfirmPassword}
                     onChange={(e) => setRecoverConfirmPassword(e.target.value)}
+                    required
                   />
                 </div>
-              </>
+
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? 'Updating Password...' : 'Reset Password →'}
+                </button>
+              </form>
             )}
 
-            {!resetSuccessMsg ? (
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Verifying Details...' : 'Recover Account'}
-              </button>
-            ) : (
-              <button type="button" className="btn btn-primary" onClick={() => setView('login')}>
-                Go to Sign In
-              </button>
+            {recoveryStep === 3 && (
+              <div style={{ display: 'grid', gap: '14px', width: '100%', textAlign: 'center', placeItems: 'center' }}>
+                <div style={{ fontSize: '3rem', color: '#10b981' }}>✓</div>
+                <div style={{ color: '#a8ffca', fontSize: '0.82rem', background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)', padding: '0.8rem', borderRadius: '6px', lineHeight: 1.4, textAlign: 'center', width: '100%' }}>
+                  {resetSuccessMsg}
+                </div>
+                <button type="button" className="btn btn-primary" onClick={() => { setView('login'); setFormData({ userId: recoverUserId, password: recoverNewPassword }); }}>
+                  Sign In Now
+                </button>
+              </div>
             )}
 
             <div className="links" style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
-              <a className="link" href="#" onClick={(e) => { e.preventDefault(); setView('login'); setErrorMessage(''); setResetSuccessMsg(''); }}>
+              <a className="link" href="#" onClick={(e) => { e.preventDefault(); setView('login'); setErrorMessage(''); }}>
                 ← Back to Sign In
               </a>
             </div>
-          </form>
+          </div>
         )}
       </LiquidGlass>
 

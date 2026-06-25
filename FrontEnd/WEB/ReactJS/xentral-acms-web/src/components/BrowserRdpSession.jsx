@@ -32,6 +32,7 @@ const TOP_BAR = {
   padding: '0 1rem',
   fontSize: '0.85rem',
   color: '#e2e8f0',
+  zIndex: 50,
 };
 
 const DISCONNECT_BTN = {
@@ -64,6 +65,15 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
   const closedRef = useRef(false);
   const connectTimeoutRef = useRef(null);
 
+  // Clipboard states
+  const [remoteClipboard, setRemoteClipboard] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [copiedId, setCopiedId] = useState(''); // File ID or custom ID for visual feedback
+  const [apiHost, setApiHost] = useState('');
+  const [hostIps, setHostIps] = useState([]);
+  const [selectedIp, setSelectedIp] = useState('');
+  const lastSyncedClipboardRef = useRef('');
+
   const baseLogs = [
     `[INFO] Initializing secure RDP tunnel to gateway...`,
     `[INFO] Routing connection via XentralACMS Gateway Proxy...`,
@@ -72,6 +82,55 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
     `[INFO] Authenticating as user: "${username}"...`,
     `[INFO] Establishing Remote Desktop Protocol handshake...`
   ];
+
+  const getBackendBaseUrl = () => {
+    if (API.includes('localhost') || API.includes('127.0.0.1')) {
+      return `http://${window.location.hostname}:8080`;
+    }
+    return API;
+  };
+
+  const showToast = (msg) => {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(''), 3000);
+  };
+
+  // File transfer methods removed per user request
+
+  const sendClipboardToRemote = () => {
+    if (!localClipboard.trim()) return;
+    const iframe = document.getElementById('rdp-iframe');
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage({ type: 'send-clipboard', content: localClipboard }, '*');
+      showToast('Clipboard synchronized to Remote PC!');
+    }
+  };
+
+  const simulateTyping = () => {
+    if (!localClipboard) return;
+    const iframe = document.getElementById('rdp-iframe');
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage({ type: 'type-text', content: localClipboard }, '*');
+      showToast('Typing keystrokes inside Remote PC...');
+    }
+  };
+
+  const copyToLocalClipboard = (text) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        showToast('Copied to local clipboard!');
+      })
+      .catch(() => {
+        alert('Failed to copy to clipboard. Please copy it manually.');
+      });
+  };
+
+  const copyText = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(''), 2000);
+  };
 
   const closeSessionOnServer = () => {
     if (closedRef.current) return;
@@ -159,12 +218,23 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
   };
 
   useEffect(() => {
+    setApiHost(getBackendBaseUrl());
+    
+    fetch(`${API}/api/system/host-ips`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setHostIps(data);
+          const nonLocal = data.find(ip => ip !== 'localhost' && ip !== '127.0.0.1');
+          setSelectedIp(nonLocal || data[0] || 'localhost');
+        }
+      })
+      .catch(err => console.error("Failed to fetch host IPs:", err));
+
     const cancel = startConnection();
     return () => {
       cancel();
-      if (connectTimeoutRef.current) {
-        clearTimeout(connectTimeoutRef.current);
-      }
+      if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
     };
   }, []);
 
@@ -200,6 +270,21 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
           return prev;
         });
         setTimeout(() => setLoading(false), 200);
+
+      } else if (e.data.type === 'rdp-clipboard') {
+        const contentText = e.data.content || '';
+        
+        setRemoteClipboard(contentText);
+        lastSyncedClipboardRef.current = contentText; // Prevent echo loop
+        
+        // Auto-copy text into local clipboard
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(contentText)
+            .then(() => {
+              showToast('Remote clipboard auto-synced locally!');
+            })
+            .catch(() => {});
+        }
 
       } else if (e.data.type === 'rdp-error') {
         if (connectTimeoutRef.current) {
@@ -296,7 +381,59 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
     return () => { closeSessionOnServer(); };
   }, []);
 
+  const syncLocalClipboardToRemote = async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text && text !== lastSyncedClipboardRef.current) {
+          lastSyncedClipboardRef.current = text;
+          const iframe = document.getElementById('rdp-iframe');
+          if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage({ type: 'send-clipboard', content: text }, '*');
+          }
+        }
+      }
+    } catch (e) {
+      // Permission or focus error - ignore safely
+    }
+  };
+
+  // Auto-sync local clipboard to remote on activity/focus
+  useEffect(() => {
+    const handleActivity = () => {
+      syncLocalClipboardToRemote();
+    };
+
+    window.addEventListener('focus', handleActivity);
+    document.addEventListener('click', handleActivity);
+    
+    const timer = setInterval(() => {
+      if (document.hasFocus()) {
+        syncLocalClipboardToRemote();
+      }
+    }, 2000);
+
+    return () => {
+      window.removeEventListener('focus', handleActivity);
+      document.removeEventListener('click', handleActivity);
+      clearInterval(timer);
+    };
+  }, []);
+
+  // Remote control methods for file box automated commands removed
+
   const countdownColor = remaining !== null && remaining <= 300 ? '#ef4444' : remaining !== null && remaining <= 900 ? '#ffcb42' : '#a8ffca';
+
+  // Computed Commands
+  const effectiveApiHost = apiHost || getBackendBaseUrl();
+
+  const formatBytes = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   return (
     <div style={OVERLAY_STYLE}>
@@ -306,13 +443,13 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
         <div style={TOP_BAR}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '1.1rem' }}>🖥️</span>
-            <strong>XentralACMS Secure HTML5 Remote Client</strong>
+            <strong>XentralACMS Secure Remote Desktop</strong>
             <span style={{ opacity: 0.3 }}>|</span>
             <span style={{ color: '#ffcb42', fontWeight: 600 }}>{hostname}</span>
             <span style={{ opacity: 0.6 }}>({ipAddress})</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {/* Countdown Timer */}
             {remaining !== null ? (
               <span style={{ fontFamily: 'Consolas, monospace', fontWeight: 700, color: countdownColor, fontSize: '0.82rem', letterSpacing: '1px' }}>
@@ -321,52 +458,80 @@ export default function BrowserRdpSession({ hostname, ipAddress, username, passw
             ) : (
               <span style={{ opacity: 0.5, fontSize: '0.78rem' }}>⚡ Unlimited</span>
             )}
+            
             <span style={{ opacity: 0.3 }}>|</span>
-            <span style={{ opacity: 0.7 }}>SSO Tunnel: <strong style={{ color: '#a8ffca' }}>{username}</strong></span>
+            <span style={{ opacity: 0.7 }}>Tunnel User: <strong style={{ color: '#a8ffca' }}>{username}</strong></span>
+            
             {rdpFile && (
               <button 
                 onClick={downloadRDP} 
                 style={{ 
-                  background: 'rgba(79, 172, 254, 0.15)', 
-                  border: '1px solid rgba(79, 172, 254, 0.4)', 
+                  background: 'rgba(79, 172, 254, 0.12)', 
+                  border: '1px solid rgba(79, 172, 254, 0.3)', 
                   color: '#4facfe', 
-                  padding: '0.3rem 0.8rem', 
-                  borderRadius: '4px', 
+                  padding: '0.35rem 0.8rem', 
+                  borderRadius: '6px', 
                   cursor: 'pointer', 
-                  fontSize: '0.72rem',
+                  fontSize: '0.75rem',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '4px',
-                  fontWeight: 'bold',
-                  marginRight: '8px'
+                  fontWeight: 'bold'
                 }}
               >
                 ⬇ Download Native RDP
               </button>
             )}
+
             <button 
               onClick={handleOpenExternal} 
               style={{ 
-                background: 'rgba(255,255,255,0.08)', 
-                border: '1px solid rgba(255,255,255,0.15)', 
+                background: 'rgba(255,255,255,0.06)', 
+                border: '1px solid rgba(255,255,255,0.12)', 
                 color: '#fff', 
-                padding: '0.3rem 0.8rem', 
-                borderRadius: '4px', 
+                padding: '0.35rem 0.8rem', 
+                borderRadius: '6px', 
                 cursor: 'pointer', 
-                fontSize: '0.72rem',
+                fontSize: '0.75rem',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px'
               }}
             >
-              🌐 Open in External Tab
+              🌐 Open External Tab
             </button>
+
+            {/* Sidebar toggle button removed */}
+
             <button style={DISCONNECT_BTN} onClick={handleDisconnect}>✕ Disconnect</button>
           </div>
         </div>
 
-        {/* Desktop Body */}
-        <RdpViewport token={token} />
+        {/* Floating Success Message/Toast */}
+        {successMsg && (
+          <div style={{
+            position: 'absolute',
+            top: '55px',
+            right: '20px',
+            background: 'rgba(16, 185, 129, 0.95)',
+            color: '#fff',
+            padding: '0.6rem 1.2rem',
+            borderRadius: '6px',
+            fontSize: '0.82rem',
+            fontWeight: 600,
+            zIndex: 99999,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            pointerEvents: 'none',
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            ✓ {successMsg}
+          </div>
+        )}
+
+        {/* Desktop Body Split-Screen */}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+          <RdpViewport token={token} />
+        </div>
       </div>
 
       {/* Loading & Failure Overlay */}
@@ -448,8 +613,10 @@ const RdpViewport = React.memo(({ token }) => {
     <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', background: '#000' }}>
         <iframe
+          id="rdp-iframe"
           src={`http://${window.location.hostname}:9250/?token=${token}&autoconnect=true`}
           title="RDP Session Client"
+          allow="clipboard-read; clipboard-write"
           style={{ flex: 1, border: 'none', background: '#000', width: '100%', height: '100%' }}
         />
       </div>

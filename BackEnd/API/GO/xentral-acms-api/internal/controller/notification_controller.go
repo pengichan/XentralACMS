@@ -239,3 +239,27 @@ func (c *NotificationController) MarkAsRead(w http.ResponseWriter, r *http.Reque
 
 	json.NewEncoder(w).Encode(map[string]string{"message": "Notification marked as read"})
 }
+
+func (c *NotificationController) ClearAll(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	userID := r.URL.Query().Get("userId")
+	if userID == "" {
+		http.Error(w, "userId is required", http.StatusBadRequest)
+		return
+	}
+
+	_, err := c.db.Exec(`
+		DELETE FROM dbo.notifications
+		WHERE user_id = @p1 OR (user_id = 'ROLE_ADMIN' AND EXISTS (
+			SELECT 1 FROM dbo.users u 
+			JOIN dbo.user_role r ON r.id = u.user_role_id 
+			WHERE u.id = @p1 AND r.role_name IN ('ADMIN', 'SUPER_ADMIN')
+		))
+	`, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"message": "Notifications cleared successfully"})
+}

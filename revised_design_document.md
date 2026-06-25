@@ -326,6 +326,14 @@ Fields: `LogID`, `Timestamp`, `Actor`, `ActorRole`, `ActionType`, `TargetType`, 
 Stores report generation history.
 Fields: `ExportID`, `ExportedBy`, `ExportType`, `ExportFormat`, `ExportTime`, `Status`, `Details`
 
+### 18.9 Database Index & Query Optimizations
+To ensure high performance and prevent slow table scans as records grow, dedicated indexes and column type optimizations are applied:
+* **User ID Column Optimization**: Altered the `user_id` column in `dbo.users` from `NVARCHAR(MAX)` to `NVARCHAR(100) NOT NULL` to allow indexing.
+* **Active User Unique Index (`uq_users_user_id_active`)**: A non-clustered filtered unique index on `dbo.users(user_id)` where `is_deleted = 0`. This guarantees fast user lookups during login and user creation.
+* **Ticketing Query Index (`idx_ticket_requester`)**: A non-clustered index on `dbo.Ticket(RequesterID, Status, IsDeleted)` to accelerate loading of active ticket requests for dashboard and menu badges.
+* **Session Audit User Index (`idx_session_audit_user`)**: A non-clustered index on `dbo.SessionAudit(UserID)` to optimize retrieval of user access history.
+* **Audit Log Actor Index (`idx_audit_log_actor`)**: A non-clustered index on `dbo.AuditLog(Actor)` to speed up auditing queries filtered by actor.
+
 ## 19. API Design
 The backend API is developed using Go Language.
 
@@ -522,3 +530,10 @@ To elevate the utility and security of the prototype beyond the initial basic re
 * **Key Features**:
   * **Sending to Target RDP PC**: Drag-drop or upload files into the "Shared File Box" in your local browser window. Once uploaded, log into the XentralACMS portal *inside* the RDP session's web browser, navigate to the Shared File Box tab, and click **Download** to retrieve it locally.
   * **Retrieving from Target RDP PC**: Inside the RDP session's browser, upload the desired file to the Shared File Box portal. Then, go to the Shared File Box page on your host PC's browser and click **Download** to save it to your local machine.
+
+### 23.17 Recovery Views Centering & Glassmorphic Border Alignment
+* **Design Decision**: Redesigned the "Recover UserID" and "Reset Password" recovery forms to center all input fields and eliminate visual layout bugs.
+* **Key Features**:
+  * **Dynamic Parent Sizing**: Modified the `LiquidGlass` container in `SignInPage.jsx` to dynamically load a `key={view}` prop, forcing the component to completely remount on view changes. This ensures the WebGL/SVG filter bounding box is measured and rendered at the correct width (either 760px for login or 450px for recovery views).
+  * **Mismatched Outline Removal**: Disabled the `.auth-card::before` CSS gradient highlight rule which drew a redundant inner rounded border outline. Setting `.auth-card::before` and `.auth-card::after` to `display: none !important` (and subsequently removing the `.auth-card::before` rule entirely) resolved the visual "mini-box" rendering glitch.
+  * **Responsive Width Limits**: Added the `.auth-liquid--recovery` class to restrict the outer container width to a clean, centered `min(450px, 100%)` layout on recovery screens, allowing the inner form cards to scale cleanly to `100%` of their parent.

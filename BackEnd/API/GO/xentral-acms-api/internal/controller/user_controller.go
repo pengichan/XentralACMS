@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -64,6 +65,64 @@ func NewUserController(db *sql.DB, mailer *mail.Mailer) *UserController {
 				uploaded_at DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
 				file_size BIGINT NOT NULL
 			);
+		END
+	`)
+
+	// Database optimizations: alter user_id column from NVARCHAR(MAX) to NVARCHAR(100) and create indices
+	_, _ = db.Exec(`
+		IF EXISTS (
+			SELECT 1 FROM sys.columns 
+			WHERE object_id = OBJECT_ID('dbo.users') 
+			  AND name = 'user_id' 
+			  AND max_length = -1
+		)
+		BEGIN
+			ALTER TABLE dbo.users ALTER COLUMN user_id NVARCHAR(100) NOT NULL;
+		END
+	`)
+
+	_, _ = db.Exec(`
+		IF NOT EXISTS (
+			SELECT 1 FROM sys.indexes 
+			WHERE name = 'uq_users_user_id_active' AND object_id = OBJECT_ID('dbo.users')
+		)
+		BEGIN
+			CREATE UNIQUE NONCLUSTERED INDEX uq_users_user_id_active 
+			ON dbo.users(user_id) 
+			WHERE is_deleted = 0;
+		END
+	`)
+
+	_, _ = db.Exec(`
+		IF NOT EXISTS (
+			SELECT 1 FROM sys.indexes 
+			WHERE name = 'idx_ticket_requester' AND object_id = OBJECT_ID('dbo.Ticket')
+		)
+		BEGIN
+			CREATE NONCLUSTERED INDEX idx_ticket_requester 
+			ON dbo.Ticket(RequesterID, Status, IsDeleted);
+		END
+	`)
+
+	_, _ = db.Exec(`
+		IF NOT EXISTS (
+			SELECT 1 FROM sys.indexes 
+			WHERE name = 'idx_session_audit_user' AND object_id = OBJECT_ID('dbo.SessionAudit')
+		)
+		BEGIN
+			CREATE NONCLUSTERED INDEX idx_session_audit_user 
+			ON dbo.SessionAudit(UserID);
+		END
+	`)
+
+	_, _ = db.Exec(`
+		IF NOT EXISTS (
+			SELECT 1 FROM sys.indexes 
+			WHERE name = 'idx_audit_log_actor' AND object_id = OBJECT_ID('dbo.AuditLog')
+		)
+		BEGIN
+			CREATE NONCLUSTERED INDEX idx_audit_log_actor 
+			ON dbo.AuditLog(Actor);
 		END
 	`)
 
@@ -285,11 +344,16 @@ func (c *UserController) Update(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	id := r.PathValue("id")
 
-	var payload dto.UserDTO
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+	var req struct {
+		dto.UserDTO
+		IsActive *bool `json:"isActive"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
+
+	payload := req.UserDTO
 	if strings.TrimSpace(payload.UserID) == "" {
 		payload.UserID = strings.TrimSpace(payload.UserIDSnake)
 	}
@@ -302,6 +366,12 @@ func (c *UserController) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if req.IsActive == nil {
+		payload.IsActive = existing.IsActive
+	} else {
+		payload.IsActive = *req.IsActive
 	}
 
 	payload.ID = id
@@ -1170,6 +1240,42 @@ func (c *UserController) GetSetupStatus(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+func (c *UserController) GetHostIPs(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	ips := []string{"localhost", "127.0.0.1", "10.0.2.2"}
+	ifaces, err := net.Interfaces()
+	if err == nil {
+		for _, i := range ifaces {
+			addrs, err := i.Addrs()
+			if err != nil {
+				continue
+			}
+			for _, addr := range addrs {
+				var ip net.IP
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
+					found := false
+					for _, existing := range ips {
+						if existing == ip.String() {
+							found = true
+							break
+						}
+					}
+					if !found {
+						ips = append(ips, ip.String())
+					}
+				}
+			}
+		}
+	}
+	json.NewEncoder(w).Encode(ips)
+}
+
 func (c *UserController) ListAccountRequests(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -2023,6 +2129,7 @@ func (c *UserController) GetPendingCounts(w http.ResponseWriter, r *http.Request
 func (c *UserController) RecoverAccount(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var payload struct {
+		UserID      string `json:"userId"`
 		FirstName   string `json:"firstName"`
 		LastName    string `json:"lastName"`
 		Email       string `json:"email"`
@@ -2033,6 +2140,7 @@ func (c *UserController) RecoverAccount(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	payload.UserID = strings.TrimSpace(payload.UserID)
 	payload.FirstName = strings.TrimSpace(payload.FirstName)
 	payload.LastName = strings.TrimSpace(payload.LastName)
 	payload.Email = strings.TrimSpace(payload.Email)
@@ -2042,14 +2150,29 @@ func (c *UserController) RecoverAccount(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Find the user matching First Name, Last Name, and Email
+	// Find the user matching First Name, Last Name, and Email (and optionally UserID)
 	var id, userID string
 	var isActive, isDeleted bool
-	err := c.db.QueryRow(`
-		SELECT CONVERT(VARCHAR(36), id) as id, user_id, is_active, is_deleted
-		FROM dbo.users
-		WHERE first_name = @p1 AND last_name = @p2 AND email = @p3 AND is_deleted = 0
-	`, payload.FirstName, payload.LastName, payload.Email).Scan(&id, &userID, &isActive, &isDeleted)
+	var query string
+	var args []interface{}
+
+	if payload.UserID != "" {
+		query = `
+			SELECT CONVERT(VARCHAR(36), id) as id, user_id, is_active, is_deleted
+			FROM dbo.users
+			WHERE first_name = @p1 AND last_name = @p2 AND email = @p3 AND user_id = @p4 AND is_deleted = 0
+		`
+		args = []interface{}{payload.FirstName, payload.LastName, payload.Email, payload.UserID}
+	} else {
+		query = `
+			SELECT CONVERT(VARCHAR(36), id) as id, user_id, is_active, is_deleted
+			FROM dbo.users
+			WHERE first_name = @p1 AND last_name = @p2 AND email = @p3 AND is_deleted = 0
+		`
+		args = []interface{}{payload.FirstName, payload.LastName, payload.Email}
+	}
+
+	err := c.db.QueryRow(query, args...).Scan(&id, &userID, &isActive, &isDeleted)
 
 	if err == sql.ErrNoRows {
 		http.Error(w, "No active account matches the details provided", http.StatusNotFound)

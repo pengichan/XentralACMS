@@ -83,6 +83,7 @@ func New(db *sql.DB, mailer *mail.Mailer) *http.ServeMux {
 	mux.HandleFunc("POST /api/account-requests/{id}/approve", user.ApproveAccountRequest)
 	mux.HandleFunc("POST /api/account-requests/{id}/deny", user.DenyAccountRequest)
 	mux.HandleFunc("GET /api/system/setup-status", user.GetSetupStatus)
+	mux.HandleFunc("GET /api/system/host-ips", user.GetHostIPs)
 	mux.HandleFunc("GET /api/system/smtp", user.ListSMTPProfiles)
 	mux.HandleFunc("POST /api/system/smtp", user.CreateSMTPProfile)
 	mux.HandleFunc("PUT /api/system/smtp/{id}", user.UpdateSMTPProfile)
@@ -144,9 +145,12 @@ func New(db *sql.DB, mailer *mail.Mailer) *http.ServeMux {
 	mux.HandleFunc("GET /api/system/events", notification.SSEHandler)
 	mux.HandleFunc("GET /api/notifications", notification.ListNotifications)
 	mux.HandleFunc("POST /api/notifications/{id}/read", notification.MarkAsRead)
+	mux.HandleFunc("DELETE /api/notifications", notification.ClearAll)
+	mux.HandleFunc("GET /rdp-file-box", fileBox.ServeRDPFileBox)
 	mux.HandleFunc("GET /api/files", fileBox.ListFiles)
 	mux.HandleFunc("POST /api/files/upload", fileBox.UploadFile)
 	mux.HandleFunc("GET /api/files/download/{id}", fileBox.DownloadFile)
+	mux.HandleFunc("GET /api/files/base64/{id}", fileBox.GetFileBase64)
 	mux.HandleFunc("DELETE /api/files/{id}", fileBox.DeleteFile)
 
 	return mux
