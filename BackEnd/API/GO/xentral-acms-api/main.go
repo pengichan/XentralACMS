@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"database/sql"
@@ -65,7 +65,12 @@ func withCORS(next http.Handler) http.Handler {
 		}
 
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		reqHeaders := r.Header.Get("Access-Control-Request-Headers")
+		if reqHeaders != "" {
+			w.Header().Set("Access-Control-Allow-Headers", reqHeaders)
+		} else {
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-SignalR-User-Agent")
+		}
 
 		// Preflight request for browsers.
 		if r.Method == http.MethodOptions {

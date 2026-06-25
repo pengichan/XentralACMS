@@ -32,6 +32,17 @@ export function AuthProvider({ children }) {
       try {
         const payload = JSON.parse(message);
         window.dispatchEvent(new CustomEvent('xentral_events_update', { detail: payload }));
+
+        const isUserAdmin = user?.roleName === 'ADMIN' || user?.roleName === 'SUPER_ADMIN';
+        if (payload.type === 'new_notification') {
+          if (payload.userId === user?.id || (payload.userId === 'ROLE_ADMIN' && isUserAdmin)) {
+            console.log('Real-time notification received: reloading page...');
+            window.location.reload();
+          }
+        } else if (payload.type === 'pending_counts_update' && isUserAdmin) {
+          console.log('Real-time pending counts update received: reloading page...');
+          window.location.reload();
+        }
       } catch (err) {
         console.error('Failed to parse event update message:', err);
       }

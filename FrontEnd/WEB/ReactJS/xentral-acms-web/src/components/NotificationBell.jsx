@@ -34,11 +34,10 @@ export default function NotificationBell() {
       if (!payload) return;
 
       if (payload.type === 'new_notification') {
-        // If message is for this user OR role ADMIN for Admins
         if (payload.userId === user.id || (payload.userId === 'ROLE_ADMIN' && isAdmin)) {
           fetchNotifications();
         }
-      } else if (payload.type === 'pending_counts_update') {
+      } else {
         fetchNotifications();
       }
     };

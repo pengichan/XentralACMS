@@ -59,11 +59,8 @@ export default function SidebarNav() {
   React.useEffect(() => {
     if (!user?.id) return;
 
-    const handleEventUpdate = (e) => {
-      const payload = e.detail;
-      if (payload && payload.type === 'pending_counts_update') {
-        fetchCounts();
-      }
+    const handleEventUpdate = () => {
+      fetchCounts();
     };
 
     window.addEventListener('xentral_events_update', handleEventUpdate);
