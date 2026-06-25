@@ -479,61 +479,66 @@ To elevate the utility and security of the prototype beyond the initial basic re
 * **Key Features**:
   * Prepend `.\` prefix to the username when connecting to RDP if the credential's `accounttype` is `'Local'` and the username does not contain a backslash. This prevents domain-joined Windows servers from attempting Active Directory authentication on local accounts.
 
-### 23.9 Real-Time Admin Notification Badges
-* **Design Decision**: Configured a dynamic notification polling engine inside the main navigation shell.
-* **Key Features**:
-  * Queries `GET /api/system/pending-counts` every 10 seconds.
-  * Displays dynamic red numeric notification badges on the admin navigation panel next to **Tickets** and **User Management** links for pending items.
-
-### 23.10 RDP Connection Viewport Diagnostics & Error Overlay
+### 23.9 RDP Connection Viewport Diagnostics & Error Overlay
 * **Design Decision**: Implemented dynamic cross-origin HTML5 telemetry between the `mstsc.js` RDP proxy and the React frontend to report connection diagnostics directly within the parent window's loading overlay.
 * **Key Features**:
   * **Rendering Telemetry (`rdp-bitmap`)**: Relays RDP canvas draw updates via `postMessage` to signify successful remote desktop authentication, delaying the transition from the loading screen to avoid flash-success false positives when a connection fails immediately post-connect.
   * **Connection Diagnostics & Mapping**: Listens to socket errors and translates complex errors (e.g. timeout, target offline, logon failure, permission denied, access restricted) into plain English alerts displayed inside the overlay.
   * **Disconnection Overlay & Viewport Close**: Automatically reinstates the loading/failure overlay on connection termination or unexpected session replacement (e.g., when another user logs in and terminates the current RDP token), providing a clean, styled "Close Viewport" button directly inside the parent window.
 
-### 23.11 Passwordless Profile-Matching Account Recovery
+### 23.10 Passwordless Profile-Matching Account Recovery
 * **Design Decision**: Implemented a passwordless identity matching mechanism for account username lookup and direct recovery resets.
 * **Key Features**:
   * **No-Email Matcher (`POST /api/auth/recover-account`)**: Validates profile First Name, Last Name, and Email Address. On successful matching, returns the UserID (username).
   * **Direct Password Reset**: If a new password is typed and passes policy validation, it updates the user password directly, allowing instant self-service recovery without relying on SMTP or log file codes.
 
-### 23.12 Go-Backed SignalR Live Notification Hub
-* **Design Decision**: Transitioned the real-time notification engine from Server-Sent Events (SSE) to a Go-backed SignalR Hub implementation.
-* **Key Features**:
-  * **SignalR WebSocket Hub (`/api/system/events`)**: Integrates the Go backend via `github.com/philippseith/signalr` to host a native SignalR protocol server.
-  * **Microsoft Client Integration**: Frontend subscribes to notification hub events inside `AuthContext.jsx` using the official `@microsoft/signalr` React client builder.
-  * **Live Badge Push Alerts**: Broadcasts JSON event messages (`OnEventUpdate`) to all active hubs when tickets/accounts are updated, triggering automatic state syncing without client-side polling.
-  * **Real-time Page Refreshing**: Key page dashboards (Dashboard, Ticketing Dashboard, User Management, and Assigned Servers) subscribe to the dynamic `xentral_events_update` event to automatically re-fetch active datasets when changes occur, updating the view instantly without browser-level page reloading.
+### 23.11 Go-Backed SignalR Live Notification Hub & Real-time Refresh
+* **Design Decision**: Transitioned the real-time notification engine from Server-Sent Events (SSE) to a Go-backed SignalR Hub implementation, resolving browser connection bottlenecks and enabling instant UI-state synchronizations.
+* **Used Libraries**:
+  * **Go Backend**: `github.com/philippseith/signalr` to initialize and host the SignalR protocol hub over standard HTTP/WebSocket multiplexing.
+  * **React Frontend**: Official `@microsoft/signalr` client package to establish and maintain resilient client connections.
+* **Used Library Features**:
+  * **WebSocket Upgrade & Handshakes**: Establishes lightweight persistent TCP channels.
+  * **Automatic Transport Fallback**: Auto-negotiates down to Server-Sent Events (SSE) or Long Polling if WebSockets are blocked by restrictive network environments.
+  * **Self-Healing Connection Retry**: Integrates a client-side recursive timeout connection mechanism that retries initial negotiation every 5 seconds if the API server goes offline.
+  * **Server-to-Client RPC Broadcasts**: Dispatches notification events (`OnEventUpdate`) from the backend controllers directly to all active clients.
+  * **Instant Full-Page Reloading**: Listens to real-time events and executes a clean browser-level refresh (`window.location.reload()`) when a relevant user/admin update is broadcast, resetting lists and updating counts instantly.
+  * **Sidebar Badges**: Displays dynamic red numeric notification badges next to **Tickets** and **User Management** in the left panel, loading them instantly on real-time event updates.
+* **Unused Library Features**:
+  * **Client-to-Server RPCs**: Clients do not invoke custom hub methods on the server (Hub connections are read-only from the client perspective).
+  * **Group/Connection-Specific Targeting**: Group management APIs are not used (events are broadcasted globally and filtered client-side for role and user ID match).
+* **Removed/Deprecated Features**:
+  * **Raw SSE Engine**: Deleted the deprecated `SSEHub` structures, custom connection pool arrays, and response flushing endpoints.
+  * **High-Frequency Polling**: Eliminated 10-second client-side backup API polling loops.
 
-### 23.13 Header 🔔 Notification Center & Dropdown
+### 23.12 Header 🔔 Notification Center & Dropdown
 * **Design Decision**: Designed a glassmorphic top header bar containing a dynamic notification alert dropdown for real-time ticket alerts and quick actions.
 * **Key Features**:
   * **Notification Database (`dbo.notifications`)**: Stores user-specific notifications and role-based group alerts (such as `ROLE_ADMIN`).
   * **Header Bell Dropdown Panel**: Admins see live ticket requests and can click **Approve** or **Deny** buttons directly within the notification list, calling backend approval endpoints natively.
-  * **Real-time Synced Action State**: When a ticket or support request is approved or denied, the backend automatically updates matching notifications in the database to `is_read = 1`. The frontend bell panel listens to SSE `pending_counts_update` messages and automatically refetches notifications, immediately hiding Approve/Deny buttons for read items and maintaining real-time synchronization.
+  * **Real-time Synced Action State**: When a ticket or support request is approved or denied, the backend automatically updates matching notifications in the database to `is_read = 1`. The frontend bell panel listens to SignalR `OnEventUpdate` messages and automatically refetches notifications, immediately hiding Approve/Deny buttons for read items and maintaining real-time synchronization.
   * **Link Redirect Alignment**: Resolves navigation routing issues by mapping target links (like `/tickets` or `/tickets/:id`, `/assigned-servers`, `/account-requests`) to their proper active React Router paths (`/pam/tickets`, `/pam/assigned-servers`, `/pam/users`).
 
-### 23.14 Audited Shared File Box Portal
+### 23.13 Audited Shared File Box Portal
 * **Design Decision**: Established a secure shared file transfer utility inside XentralACMS.
 * **Key Features**:
   * **Audited Uploads/Downloads**: Tracks file transfers in the database table `dbo.shared_files` and outputs High-severity `AuditLog` records for all uploads and downloads.
   * **Bi-directional RDP Copy-Paste Bypass**: Users can drop files from their local PC into the File Box web portal, and retrieve them by opening the portal browser inside the remote RDP desktop session (and vice versa).
 
-### 23.15 Native RDP Client Launch & Clipboard Bypass
+### 23.14 Native RDP Client Launch & Clipboard Bypass
 * **Design Decision**: Provided a native Remote Desktop Connection shortcut option for users experiencing screen lag or performance bottlenecks in the browser HTML5 canvas client.
 * **Key Features**:
   * **Telemetry Propagated RDP File**: Propagates the generated `.rdp` connection profile dynamically down to the `BrowserRdpSession` component viewport.
   * **Control Bar Shortcut**: Adds a prominent "Download Native RDP" button directly onto the browser RDP viewport control bar, allowing users to transition to `mstsc.exe` with a single click.
   * **Clip-Copy Credentials**: Automatically saves the dynamically generated session password to the local clipboard when the `.rdp` file is downloaded, allowing instant login pasting.
 
-### 23.16 Audited Shared File Box Retrieve/Send Workflow
+### 23.15 Audited Shared File Box Retrieve/Send Workflow
 * **Design Decision**: Outlined instructions for exchanging files between the local host PC and the target remote RDP desktop using the secure air-gapped web portal.
 * **Key Features**:
   * **Sending to Target RDP PC**: Drag-drop or upload files into the "Shared File Box" in your local browser window. Once uploaded, log into the XentralACMS portal *inside* the RDP session's web browser, navigate to the Shared File Box tab, and click **Download** to retrieve it locally.
   * **Retrieving from Target RDP PC**: Inside the RDP session's browser, upload the desired file to the Shared File Box portal. Then, go to the Shared File Box page on your host PC's browser and click **Download** to save it to your local machine.
 
-### 23.17 Recovery Views Centering & Glassmorphic Border Alignment
+### 23.16 Recovery Views Centering & Glassmorphic Border Alignment
 * **Design Decision**: Redesigned the "Recover UserID" and "Reset Password" recovery forms to center all input fields and eliminate visual layout bugs.
 * **Key Features**:
   * **Dynamic Parent Sizing**: Modified the `LiquidGlass` container in `SignInPage.jsx` to dynamically load a `key={view}` prop, forcing the component to completely remount on view changes. This ensures the WebGL/SVG filter bounding box is measured and rendered at the correct width (either 760px for login or 450px for recovery views).
