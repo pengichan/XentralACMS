@@ -498,11 +498,13 @@ To elevate the utility and security of the prototype beyond the initial basic re
   * **No-Email Matcher (`POST /api/auth/recover-account`)**: Validates profile First Name, Last Name, and Email Address. On successful matching, returns the UserID (username).
   * **Direct Password Reset**: If a new password is typed and passes policy validation, it updates the user password directly, allowing instant self-service recovery without relying on SMTP or log file codes.
 
-### 23.12 Server-Sent Events (SSE) Live Notification Hub
-* **Design Decision**: Configured a Server-Sent Events (SSE) publisher/subscriber channel system in the Go backend.
+### 23.12 Go-Backed SignalR Live Notification Hub
+* **Design Decision**: Transitioned the real-time notification engine from Server-Sent Events (SSE) to a Go-backed SignalR Hub implementation.
 * **Key Features**:
-  * **Event Streaming Hub (`GET /api/system/events`)**: Streams `text/event-stream` channels to connect browsers with standard `EventSource` wrappers.
-  * **Live Badge Push Alerts**: Broadcasts `pending_counts_update` whenever a ticket/account support request is submitted, approved, or denied. Connected client browsers instantly re-fetch count badge tallies without page refreshes.
+  * **SignalR WebSocket Hub (`/api/system/events`)**: Integrates the Go backend via `github.com/philippseith/signalr` to host a native SignalR protocol server.
+  * **Microsoft Client Integration**: Frontend subscribes to notification hub events inside `AuthContext.jsx` using the official `@microsoft/signalr` React client builder.
+  * **Live Badge Push Alerts**: Broadcasts JSON event messages (`OnEventUpdate`) to all active hubs when tickets/accounts are updated, triggering automatic state syncing without client-side polling.
+  * **Real-time Page Refreshing**: Key page dashboards (Dashboard, Ticketing Dashboard, User Management, and Assigned Servers) subscribe to the dynamic `xentral_events_update` event to automatically re-fetch active datasets when changes occur, updating the view instantly without browser-level page reloading.
 
 ### 23.13 Header 🔔 Notification Center & Dropdown
 * **Design Decision**: Designed a glassmorphic top header bar containing a dynamic notification alert dropdown for real-time ticket alerts and quick actions.

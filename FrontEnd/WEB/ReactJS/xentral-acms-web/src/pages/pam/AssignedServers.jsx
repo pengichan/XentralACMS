@@ -54,6 +54,16 @@ export default function AssignedServers() {
     fetchAssignedServers();
   }, [fetchAssignedServers]);
 
+  useEffect(() => {
+    const handleEventsUpdate = () => {
+      fetchAssignedServers();
+    };
+    window.addEventListener('xentral_events_update', handleEventsUpdate);
+    return () => {
+      window.removeEventListener('xentral_events_update', handleEventsUpdate);
+    };
+  }, [fetchAssignedServers]);
+
   const handleLaunchRDP = async (server) => {
     setSelectedServer(server);
     setConnectionState('loading');

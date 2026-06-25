@@ -531,6 +531,17 @@ export default function UserManagement() {
     fetchAccountRequests();
   }, [fetchUsers, fetchAccountRequests]);
 
+  useEffect(() => {
+    const handleEventsUpdate = () => {
+      fetchUsers();
+      fetchAccountRequests();
+    };
+    window.addEventListener('xentral_events_update', handleEventsUpdate);
+    return () => {
+      window.removeEventListener('xentral_events_update', handleEventsUpdate);
+    };
+  }, [fetchUsers, fetchAccountRequests]);
+
   const isProtectedSuperAdmin = (u) => u.userRoleId === ROLE_ID_MAP.SUPER_ADMIN;
 
   const filtered = users.filter(u => {

@@ -62,6 +62,11 @@ function AdminDashboard({ user }) {
       }
     }
     loadData();
+
+    window.addEventListener('xentral_events_update', loadData);
+    return () => {
+      window.removeEventListener('xentral_events_update', loadData);
+    };
   }, []);
 
   return (
@@ -134,6 +139,11 @@ function UserDashboard({ user }) {
       }
     }
     loadData();
+
+    window.addEventListener('xentral_events_update', loadData);
+    return () => {
+      window.removeEventListener('xentral_events_update', loadData);
+    };
   }, [user.userId]);
 
   return (

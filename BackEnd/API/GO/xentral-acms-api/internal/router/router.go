@@ -7,6 +7,8 @@ import (
 	"xentral-acms-api/internal/controller"
 	"xentral-acms-api/internal/docs"
 	"xentral-acms-api/internal/mail"
+
+	"github.com/philippseith/signalr"
 )
 
 // New wires all API routes and returns the root mux.
@@ -141,8 +143,11 @@ func New(db *sql.DB, mailer *mail.Mailer) *http.ServeMux {
 	// Reports
 	mux.HandleFunc("POST /api/reports/export", report.ExportReport)
 
-	// Notifications & File Box
-	mux.HandleFunc("GET /api/system/events", notification.SSEHandler)
+	// Notifications & File Box (Using SignalR Hub)
+	controller.InitSignalR()
+	if controller.GlobalSignalRServer != nil {
+		controller.GlobalSignalRServer.MapHTTP(signalr.WithHTTPServeMux(mux), "/api/system/events")
+	}
 	mux.HandleFunc("GET /api/notifications", notification.ListNotifications)
 	mux.HandleFunc("POST /api/notifications/{id}/read", notification.MarkAsRead)
 	mux.HandleFunc("DELETE /api/notifications", notification.ClearAll)

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import * as signalR from '@microsoft/signalr';
 
 const AuthContext = createContext(null);
 
@@ -22,23 +23,40 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!user?.id) return;
 
-    const eventSource = new EventSource('http://localhost:8080/api/system/events');
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl('http://localhost:8080/api/system/events')
+      .withAutomaticReconnect()
+      .build();
 
-    eventSource.onmessage = (e) => {
+    connection.on('OnEventUpdate', (message) => {
       try {
-        const payload = JSON.parse(e.data);
+        const payload = JSON.parse(message);
         window.dispatchEvent(new CustomEvent('xentral_events_update', { detail: payload }));
       } catch (err) {
-        // Skip comment lines / pings
+        console.error('Failed to parse event update message:', err);
+      }
+    });
+
+    let isMounted = true;
+    const startConnection = async () => {
+      try {
+        await connection.start();
+        console.log('SignalR connected successfully!');
+      } catch (err) {
+        console.error('SignalR Hub connection failed, retrying in 5s...', err);
+        if (isMounted) {
+          setTimeout(startConnection, 5000);
+        }
       }
     };
 
-    eventSource.onerror = (err) => {
-      console.error('SSE connection error:', err);
-    };
+    startConnection();
 
     return () => {
-      eventSource.close();
+      isMounted = false;
+      connection.stop()
+        .then(() => console.log('SignalR disconnected successfully.'))
+        .catch((err) => console.error('SignalR stop failed:', err));
     };
   }, [user?.id]);
 
