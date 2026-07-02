@@ -1,12 +1,12 @@
 package main
 
 import (
-	"database/sql"
 	"log"
 	"net/http"
 	"strings"
 
 	"xentral-acms-api/internal/config"
+	"xentral-acms-api/internal/dbproxy"
 	"xentral-acms-api/internal/mail"
 	"xentral-acms-api/internal/router"
 
@@ -14,19 +14,24 @@ import (
 )
 
 func main() {
-	connectionString, err := config.GetDatabaseConnectionString("appsetting.config")
+	primaryConnStr, err := config.GetDatabaseConnectionString("appsetting.config")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	db, err := sql.Open("sqlserver", connectionString)
+	secondaryConnStr, err := config.GetDatabaseSecondaryConnectionString("appsetting.config")
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	db, err := dbproxy.NewProxy(primaryConnStr, secondaryConnStr)
+	if err != nil {
+		log.Fatalf("Failed to initialize database proxy: %v", err)
 	}
 	defer db.Close()
 
 	if err := db.Ping(); err != nil {
-		log.Fatal(err)
+		log.Fatalf("Database ping failed: %v", err)
 	}
 
 	smtpCfg, err := config.GetSMTPConfig("appsetting.config")

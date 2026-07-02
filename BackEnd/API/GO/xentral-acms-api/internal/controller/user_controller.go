@@ -11,18 +11,19 @@ import (
 	"time"
 
 	"xentral-acms-api/internal/config"
+	"xentral-acms-api/internal/dbproxy"
 	"xentral-acms-api/internal/dto"
 	"xentral-acms-api/internal/mail"
 )
 
 type UserController struct {
-	db     *sql.DB
+	db     dbproxy.DB
 	mailer *mail.Mailer
 }
 
 const defaultSignUpRoleID = "22222222-2222-2222-2222-222222222222"
 
-func NewUserController(db *sql.DB, mailer *mail.Mailer) *UserController {
+func NewUserController(db dbproxy.DB, mailer *mail.Mailer) *UserController {
 	// Auto-migrate password_reset_codes table
 	_, _ = db.Exec(`
 		IF OBJECT_ID('dbo.password_reset_codes', 'U') IS NULL

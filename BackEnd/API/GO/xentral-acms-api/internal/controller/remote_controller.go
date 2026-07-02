@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"xentral-acms-api/internal/dbproxy"
 	"xentral-acms-api/internal/utils"
 )
 
@@ -24,11 +25,11 @@ type PendingSession struct {
 }
 
 type RemoteController struct {
-	db              *sql.DB
+	db              dbproxy.DB
 	pendingSessions sync.Map
 }
 
-func NewRemoteController(db *sql.DB) *RemoteController {
+func NewRemoteController(db dbproxy.DB) *RemoteController {
 	// On server startup, close all orphaned sessions.
 	// When the server restarts, all websocket/RDP proxy connections are lost,
 	// so any session still marked as open (EndTime IS NULL) is stale.

@@ -1,10 +1,10 @@
 package router
 
 import (
-	"database/sql"
 	"net/http"
 
 	"xentral-acms-api/internal/controller"
+	"xentral-acms-api/internal/dbproxy"
 	"xentral-acms-api/internal/docs"
 	"xentral-acms-api/internal/mail"
 
@@ -12,7 +12,7 @@ import (
 )
 
 // New wires all API routes and returns the root mux.
-func New(db *sql.DB, mailer *mail.Mailer) *http.ServeMux {
+func New(db dbproxy.DB, mailer *mail.Mailer) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	health := controller.NewHealthController()

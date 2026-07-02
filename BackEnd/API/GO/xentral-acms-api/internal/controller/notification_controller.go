@@ -8,20 +8,21 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"xentral-acms-api/internal/dbproxy"
 )
 
 // Hub and SSE handlers replaced with SignalR Server broadcasts
 
 type NotificationController struct {
-	db *sql.DB
+	db dbproxy.DB
 }
 
-func NewNotificationController(db *sql.DB) *NotificationController {
+func NewNotificationController(db dbproxy.DB) *NotificationController {
 	return &NotificationController{db: db}
 }
 
 // AddNotification Helper function to create notification and broadcast
-func AddNotification(db *sql.DB, userID, title, message, link string) error {
+func AddNotification(db dbproxy.DB, userID, title, message, link string) error {
 	id := uuid.New().String()
 	_, err := db.Exec(`
 		INSERT INTO dbo.notifications (id, user_id, title, message, link, is_read, created_at)

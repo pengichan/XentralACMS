@@ -8,14 +8,15 @@ import (
 	"strings"
 	"time"
 
+	"xentral-acms-api/internal/dbproxy"
 	"xentral-acms-api/internal/model"
 )
 
 type TicketController struct {
-	db *sql.DB
+	db dbproxy.DB
 }
 
-func NewTicketController(db *sql.DB) *TicketController {
+func NewTicketController(db dbproxy.DB) *TicketController {
 	// Auto-migrate ValidFrom column if it doesn't exist
 	_, _ = db.Exec(`
 		IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Ticket]') AND name = N'ValidFrom')

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"xentral-acms-api/internal/dbproxy"
 	"xentral-acms-api/internal/model"
 	"xentral-acms-api/internal/utils"
 )
@@ -17,10 +18,10 @@ import (
 const masterKey = "12345678901234567890123456789012"
 
 type CredentialController struct {
-	db *sql.DB
+	db dbproxy.DB
 }
 
-func NewCredentialController(db *sql.DB) *CredentialController {
+func NewCredentialController(db dbproxy.DB) *CredentialController {
 	return &CredentialController{
 		db: db,
 	}

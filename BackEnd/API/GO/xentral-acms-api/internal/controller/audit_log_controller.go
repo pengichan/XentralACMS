@@ -6,14 +6,15 @@ import (
 	"net/http"
 	"time"
 
+	"xentral-acms-api/internal/dbproxy"
 	"xentral-acms-api/internal/model"
 )
 
 type AuditLogController struct {
-	db *sql.DB
+	db dbproxy.DB
 }
 
-func NewAuditLogController(db *sql.DB) *AuditLogController {
+func NewAuditLogController(db dbproxy.DB) *AuditLogController {
 	return &AuditLogController{
 		db: db,
 	}

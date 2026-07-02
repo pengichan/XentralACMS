@@ -1,7 +1,6 @@
 ﻿package controller
 
 import (
-	"database/sql"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -9,14 +8,15 @@ import (
 	"strings"
 	"time"
 
+	"xentral-acms-api/internal/dbproxy"
 	"xentral-acms-api/internal/model"
 )
 
 type ReportController struct {
-	db *sql.DB
+	db dbproxy.DB
 }
 
-func NewReportController(db *sql.DB) *ReportController {
+func NewReportController(db dbproxy.DB) *ReportController {
 	return &ReportController{
 		db: db,
 	}

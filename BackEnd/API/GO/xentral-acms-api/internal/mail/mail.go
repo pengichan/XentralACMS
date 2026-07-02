@@ -1,7 +1,6 @@
 ﻿package mail
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"net/smtp"
@@ -10,14 +9,15 @@ import (
 	"time"
 
 	"xentral-acms-api/internal/config"
+	"xentral-acms-api/internal/dbproxy"
 )
 
 type Mailer struct {
-	db  *sql.DB
+	db  dbproxy.DB
 	cfg *config.SMTPConfig
 }
 
-func NewMailer(db *sql.DB, cfg *config.SMTPConfig) *Mailer {
+func NewMailer(db dbproxy.DB, cfg *config.SMTPConfig) *Mailer {
 	return &Mailer{db: db, cfg: cfg}
 }
 

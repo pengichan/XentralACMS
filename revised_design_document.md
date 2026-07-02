@@ -544,3 +544,85 @@ To elevate the utility and security of the prototype beyond the initial basic re
   * **Dynamic Parent Sizing**: Modified the `LiquidGlass` container in `SignInPage.jsx` to dynamically load a `key={view}` prop, forcing the component to completely remount on view changes. This ensures the WebGL/SVG filter bounding box is measured and rendered at the correct width (either 760px for login or 450px for recovery views).
   * **Mismatched Outline Removal**: Disabled the `.auth-card::before` CSS gradient highlight rule which drew a redundant inner rounded border outline. Setting `.auth-card::before` and `.auth-card::after` to `display: none !important` (and subsequently removing the `.auth-card::before` rule entirely) resolved the visual "mini-box" rendering glitch.
   * **Responsive Width Limits**: Added the `.auth-liquid--recovery` class to restrict the outer container width to a clean, centered `min(450px, 100%)` layout on recovery screens, allowing the inner form cards to scale cleanly to `100%` of their parent.
+
+## 24. Database Redundancy, Failover & Synchronization
+
+### 24.1 Overview
+To achieve high availability and data resilience for XentralACMS, a primary-secondary database redundancy system was implemented. The Go backend manages a second SQL Server database (`OrbitACMS_Secondary`) running on the same host instance. All backend API operations route through a database proxy layer (`internal/dbproxy`) that provides transparent failover, background synchronization, and automatic recovery catch-up — with no changes required to any controller, handler, or business logic code.
+
+### 24.2 Secondary Database Auto-Initialization
+On backend startup, the proxy connects to the SQL Server `master` database and checks whether `OrbitACMS_Secondary` exists. If it does not, it is created automatically using `CREATE DATABASE OrbitACMS_Secondary`. The proxy then inspects all base tables in the primary (`dbo` schema) and clones any that are missing from the secondary, including column definitions, data types, character lengths, identity (auto-increment) properties, and primary key constraints.
+
+This means the secondary database is always schema-consistent with the primary on startup without requiring manual setup or migration scripts.
+
+### 24.3 DB Interface & Proxy Layer
+A `DB` interface is declared in `internal/dbproxy/dbproxy.go`:
+
+```go
+type DB interface {
+    Query(query string, args ...any) (*sql.Rows, error)
+    QueryRow(query string, args ...any) *sql.Row
+    Exec(query string, args ...any) (sql.Result, error)
+    Ping() error
+    Close() error
+}
+```
+
+All controllers, the router, and the mailer accept `dbproxy.DB` instead of `*sql.DB`. The `Proxy` struct implements this interface and wraps both database connections.
+
+### 24.4 Transparent Failover
+The `Proxy` tracks a `primaryHealthy bool` flag protected by a mutex. On every `Query` or `Exec` call:
+
+1. `getActiveDB()` returns the primary connection if healthy, otherwise the secondary.
+2. If the operation returns a connection-class error (e.g. `Cannot open database`, `login error`, `connection refused`, `EOF`, `timeout`), `handleFailover()` marks the primary unhealthy and retries the same operation on the secondary.
+3. The failover is transparent — the calling controller receives a valid result without any error propagation.
+
+### 24.5 Health Monitor & Primary Recovery
+A background goroutine (`monitorPrimaryHealth`) runs a ticker every 10 seconds. While the primary is unhealthy, it pings the primary connection. When the ping succeeds:
+
+1. A catch-up synchronization is initiated: all data written to the secondary during the outage is replicated back to the primary (secondary → primary direction).
+2. After the catch-up sync completes, `primaryHealthy` is set back to `true`, restoring normal routing.
+
+### 24.6 Scheduled 60-Second Synchronization
+A second background goroutine (`startReplicationWorker`) runs every 60 seconds. While the primary is active and the secondary is reachable, it performs a full differential sync from primary to secondary:
+
+- **Insert**: Rows present in source but absent in destination are inserted, with `IDENTITY_INSERT ON/OFF` toggled for tables with identity columns.
+- **Update**: Rows present in both but with differing values are updated using a generated `SET` clause.
+- **Delete (Purge)**: Rows present in the destination but absent in the source are deleted to keep the secondary consistent with the primary.
+
+### 24.7 UNIQUEIDENTIFIER Handling
+SQL Server `UNIQUEIDENTIFIER` columns are retrieved by the Go SQL driver as raw 16-byte binary blobs when using `SELECT *`. To handle this correctly:
+
+- The sync engine queries column types from `INFORMATION_SCHEMA.COLUMNS` before reading rows.
+- For GUID columns, the `SELECT` is built with `CONVERT(VARCHAR(36), col) AS col` to force string output.
+- On `INSERT` and `UPDATE`, GUID string values are passed back using `CAST(@pN AS UNIQUEIDENTIFIER)` to satisfy SQL Server's type constraint.
+
+### 24.8 Configuration
+The secondary connection string is stored in `appsetting.config` under the `[database]` section:
+
+```ini
+secondary_connection_string=sqlserver://<DB_USERNAME>:<DB_PASSWORD>@localhost:1433?database=OrbitACMS_Secondary&encrypt=disable
+```
+
+It is read at startup by `config.GetDatabaseSecondaryConnectionString()`. The environment variable `XENTRAL_DB_SECONDARY_CONNECTION` can override the config file value for deployment flexibility.
+
+### 24.9 Files Changed
+| File | Change |
+|---|---|
+| `appsetting.config` | Added `secondary_connection_string` |
+| `internal/config/app_config.go` | Added `GetDatabaseSecondaryConnectionString()` |
+| `internal/dbproxy/dbproxy.go` | New package — full proxy, schema cloner, sync engine |
+| `main.go` | Uses `dbproxy.NewProxy()` instead of `sql.Open()` |
+| `internal/router/router.go` | Accepts `dbproxy.DB` instead of `*sql.DB` |
+| `internal/mail/mail.go` | Accepts `dbproxy.DB` instead of `*sql.DB` |
+| `internal/controller/*.go` | All 10 controllers updated to use `dbproxy.DB` |
+
+### 24.10 Test Results
+All four redundancy scenarios were verified:
+
+| Test | Scenario | Result |
+|---|---|---|
+| 1 | Schema cloning | All 17 tables created in `OrbitACMS_Secondary` on first startup |
+| 2 | 60-second sync | Record inserted via API appeared in secondary within 60 seconds |
+| 3 | Live failover | API continued returning data after primary was taken offline (`ALTER DATABASE OrbitACMS SET OFFLINE`) |
+| 4 | Recovery catch-up | Record written to secondary during outage was replicated back to primary once it came back online |

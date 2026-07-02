@@ -6,14 +6,15 @@ import (
 	"net/http"
 	"time"
 
+	"xentral-acms-api/internal/dbproxy"
 	"xentral-acms-api/internal/dto"
 )
 
 type UserRoleControllerDB struct {
-	db *sql.DB
+	db dbproxy.DB
 }
 
-func NewUserRoleControllerDB(db *sql.DB) *UserRoleControllerDB {
+func NewUserRoleControllerDB(db dbproxy.DB) *UserRoleControllerDB {
 	return &UserRoleControllerDB{db: db}
 }
 

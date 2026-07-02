@@ -13,13 +13,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"xentral-acms-api/internal/dbproxy"
 )
 
 type FileController struct {
-	db *sql.DB
+	db dbproxy.DB
 }
 
-func NewFileController(db *sql.DB) *FileController {
+func NewFileController(db dbproxy.DB) *FileController {
 	// Create shared_uploads directory if not exists
 	if err := os.MkdirAll("shared_uploads", os.ModePerm); err != nil {
 		log.Printf("[FILE ERROR] Failed to create shared_uploads folder: %v", err)

@@ -9,14 +9,15 @@ import (
 	"strings"
 	"time"
 
+	"xentral-acms-api/internal/dbproxy"
 	"xentral-acms-api/internal/model"
 )
 
 type ServerController struct {
-	db *sql.DB
+	db dbproxy.DB
 }
 
-func NewServerController(db *sql.DB) *ServerController {
+func NewServerController(db dbproxy.DB) *ServerController {
 	return &ServerController{
 		db: db,
 	}
